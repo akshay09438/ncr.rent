@@ -1,0 +1,2526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>delhi.rent — Anonymous NCR Rent Map</title>
+  <meta name="description" content="Community-driven anonymous rent map for Delhi NCR and Gurgaon. Find flatmates, see real rents, and share yours — no login required." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Marker Clusterer — must load before initMap() runs -->
+  <script src="https://unpkg.com/@googlemaps/markerclusterer@2.5.3/dist/index.min.js"></script>
+
+  <!-- Google Maps: fires __googleMapsInit on load -->
+  <script>
+    window.__googleMapsInit = function() {
+      window.dispatchEvent(new Event('google-maps-loaded'));
+    };
+  </script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAYWTVV8wHpjQMDLX388HFp2duaNB_BoJU&libraries=geometry,places&callback=window.__googleMapsInit" async defer></script>
+</head>
+<body>
+
+  <!-- ===== NAV ===== -->
+  <nav id="nav">
+    <div class="nav-brand">
+      <span class="brand-icon">📍</span>
+      <span class="brand-name">delhi.rent</span>
+    </div>
+    <div class="nav-links">
+      <button class="nav-btn active" data-view="map">Find a Flat</button>
+      <button class="nav-btn" data-view="list">List My Flat</button>
+      <button class="nav-btn" data-view="avail">Avlb Flats</button>
+      <button class="nav-btn" data-view="stats">Live Stats</button>
+      <button class="nav-btn" data-view="faq">FAQ</button>
+    </div>
+    <div class="nav-pin-count">
+      <span id="pin-count">0</span> pins
+    </div>
+  </nav>
+
+  <!-- ===== MAP ===== -->
+  <div id="map-container">
+    <div id="map"></div>
+
+    <!-- Search bar — centered top -->
+    <div id="search-bar-wrap">
+      <input id="search-input" type="text" placeholder="Search neighbourhood or area..." autocomplete="off" />
+      <div id="search-results" class="hidden"></div>
+    </div>
+
+    <!-- Map controls (top-right) -->
+    <div id="map-controls">
+      <button class="ctrl-btn" id="btn-pin-location" title="My location">📍</button>
+      <button class="ctrl-btn" id="btn-legend" title="Map legend">ℹ️ Legend</button>
+      <button class="ctrl-btn" id="btn-satellite" title="Toggle satellite">🛰 Satellite</button>
+      <button class="ctrl-btn" id="btn-metro"   title="Toggle metro lines">🚇 Metro</button>
+      <button class="ctrl-btn" id="btn-aqi"      title="Toggle AQI overlay">🌬 AQI</button>
+      <button class="ctrl-btn" id="btn-express"   title="Toggle expressways">🛣 Express</button>
+      <button class="ctrl-btn" id="btn-green-cover" title="Toggle green cover">🛰️ Green Cover</button>
+    </div>
+
+    <!-- Prominent Drop a Pin FAB — bottom center -->
+    <button id="btn-drop-pin-fab" style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:20;background:#7c3aed;color:#fff;border:none;border-radius:24px;padding:12px 28px;font-size:15px;font-weight:700;font-family:Inter,sans-serif;cursor:pointer;box-shadow:0 4px 20px rgba(124,58,237,0.6);display:flex;align-items:center;gap:8px;white-space:nowrap;">
+      📍 Drop a Pin
+    </button>
+
+    <!-- Pin count badge -->
+    <div id="map-pin-badge">
+      <span id="visible-pin-count">0</span> listings visible
+    </div>
+  </div>
+
+  <!-- ===== FILTER PANEL ===== -->
+  <div id="filter-panel">
+    <div class="filter-header">
+      <span>Filters</span>
+      <button id="btn-clear-filters" class="text-btn">Clear all</button>
+    </div>
+
+    <!-- Pin type toggle -->
+    <div class="filter-section">
+      <div class="filter-toggle-row">
+        <button class="toggle-btn active" data-pin-view="rental">Listings</button>
+        <button class="toggle-btn" data-pin-view="seeker">Seekers</button>
+        <button class="toggle-btn" data-pin-view="both">Both</button>
+      </div>
+    </div>
+
+    <!-- BHK -->
+    <div class="filter-section">
+      <label class="filter-label">BHK</label>
+      <div class="chip-row" id="bhk-chips">
+        <button class="chip" data-bhk="1">1</button>
+        <button class="chip" data-bhk="2">2</button>
+        <button class="chip" data-bhk="3">3</button>
+        <button class="chip" data-bhk="4">4</button>
+        <button class="chip" data-bhk="5">5+</button>
+      </div>
+    </div>
+
+    <!-- Rent range -->
+    <div class="filter-section">
+      <label class="filter-label">Rent (₹)</label>
+      <div class="rent-range">
+        <input type="number" id="rent-min" placeholder="Min" min="0" />
+        <span>–</span>
+        <input type="number" id="rent-max" placeholder="Max" min="0" />
+      </div>
+    </div>
+
+    <!-- Furnishing -->
+    <div class="filter-section">
+      <label class="filter-label">Furnishing</label>
+      <div class="filter-toggle-row">
+        <button class="toggle-btn small active" data-furnishing="any">Any</button>
+        <button class="toggle-btn small" data-furnishing="furnished">Furnished</button>
+        <button class="toggle-btn small" data-furnishing="unfurnished">Unfurnished</button>
+      </div>
+    </div>
+
+    <!-- Gated -->
+    <div class="filter-section">
+      <label class="filter-label">Society</label>
+      <div class="filter-toggle-row">
+        <button class="toggle-btn small active" data-gated="any">Any</button>
+        <button class="toggle-btn small" data-gated="gated">Gated</button>
+        <button class="toggle-btn small" data-gated="open">Open</button>
+      </div>
+    </div>
+
+    <!-- Min rating -->
+    <div class="filter-section">
+      <label class="filter-label">Min Rating</label>
+      <div class="chip-row" id="rating-chips">
+        <button class="chip" data-rating="2">2★+</button>
+        <button class="chip" data-rating="3">3★+</button>
+        <button class="chip" data-rating="4">4★+</button>
+      </div>
+    </div>
+
+    <!-- Near metro -->
+    <div class="filter-section">
+      <label class="filter-label">Near Metro</label>
+      <select id="metro-distance">
+        <option value="">Any distance</option>
+        <option value="0.5">Within 500m</option>
+        <option value="1">Within 1km</option>
+        <option value="2">Within 2km</option>
+      </select>
+    </div>
+
+    <!-- Commute hub -->
+    <div class="filter-section">
+      <label class="filter-label">Commute Hub</label>
+      <select id="commute-hub">
+        <option value="">Any</option>
+        <option value="cyber_hub">Cyber Hub, Gurgaon</option>
+        <option value="cp">Connaught Place</option>
+        <option value="noida_sec62">Noida Sector 62</option>
+        <option value="saket">Saket</option>
+        <option value="dwarka">Dwarka Sector 21</option>
+      </select>
+    </div>
+
+    <!-- Active filters -->
+    <div id="active-filters"></div>
+  </div>
+
+  <!-- ===== PIN POPUP ===== -->
+  <div id="pin-popup" class="modal hidden">
+    <div class="modal-content popup-content">
+      <button class="modal-close" id="popup-close">✕</button>
+
+      <!-- Header -->
+      <div class="popup-header">
+        <div class="popup-rent" id="popup-rent">₹--</div>
+        <div class="popup-badges" id="popup-badges"></div>
+      </div>
+
+      <!-- Tags row -->
+      <div class="popup-tags" id="popup-tags"></div>
+
+      <!-- Meta -->
+      <div class="popup-meta" id="popup-meta"></div>
+
+      <!-- One-liner -->
+      <div class="popup-one-liner hidden" id="popup-one-liner"></div>
+
+      <!-- CTAs -->
+      <div class="popup-ctas">
+        <button class="btn btn-primary" id="btn-interested">I'm Interested</button>
+        <button class="btn btn-secondary" id="btn-watch-area">Watch Area</button>
+        <button class="btn btn-secondary" id="btn-share">Share</button>
+      </div>
+
+      <!-- Divider -->
+      <hr class="popup-divider" />
+
+      <!-- Ratings -->
+      <div class="popup-section">
+        <div class="popup-section-title">Community Rating</div>
+        <div class="rating-display" id="popup-rating">
+          <span class="stars">★★★★★</span>
+          <span class="rating-num">0.0</span>
+        </div>
+        <div class="rating-input" id="rating-input">
+          <div class="rating-row">
+            <span>Locality</span>
+            <div class="star-picker" data-field="locality">
+              <span class="star" data-val="1">★</span><span class="star" data-val="2">★</span><span class="star" data-val="3">★</span><span class="star" data-val="4">★</span><span class="star" data-val="5">★</span>
+            </div>
+          </div>
+          <div class="rating-row">
+            <span>Built Quality</span>
+            <div class="star-picker" data-field="built">
+              <span class="star" data-val="1">★</span><span class="star" data-val="2">★</span><span class="star" data-val="3">★</span><span class="star" data-val="4">★</span><span class="star" data-val="5">★</span>
+            </div>
+          </div>
+          <button class="btn btn-sm" id="btn-submit-rating">Submit Rating</button>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <hr class="popup-divider" />
+
+      <!-- Comments -->
+      <div class="popup-section">
+        <div class="popup-section-title">Comments</div>
+        <div class="comments-list" id="comments-list"></div>
+        <div class="comment-input-row">
+          <input type="text" id="comment-input" placeholder="Add a comment..." maxlength="500" />
+          <button class="btn btn-sm" id="btn-submit-comment">Post</button>
+        </div>
+      </div>
+
+      <!-- Footer actions -->
+      <div class="popup-footer hidden" id="popup-footer">
+        <button class="btn btn-danger btn-sm" id="btn-delete-pin">Delete</button>
+        <button class="btn btn-secondary btn-sm" id="btn-edit-pin">Edit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PIN SUBMISSION FORM ===== -->
+  <div id="pin-form-panel" class="panel hidden">
+    <div class="panel-header">
+      <span id="form-title">Drop a Pin</span>
+      <button class="panel-close" id="form-close">✕</button>
+    </div>
+
+    <!-- Mode tabs: rental / seeker / flatmate -->
+    <div class="form-mode-tabs">
+      <button class="mode-tab active" data-mode="rental">Rent my flat</button>
+      <button class="mode-tab" data-mode="seeker">Looking for flat</button>
+      <button class="mode-tab" data-mode="flatmate">Find flatmate</button>
+    </div>
+
+    <form id="pin-form" novalidate>
+
+      <!-- === RENTAL MODE === -->
+      <div class="form-section" id="form-section-rental">
+
+        <div class="form-row">
+          <label>Type</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="rental_type" data-val="whole">Whole Flat</button>
+            <button type="button" class="toggle-btn small" data-field="rental_type" data-val="room">Room</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="f-bhk">BHK *</label>
+          <select id="f-bhk" required>
+            <option value="">Select BHK</option>
+            <option value="1">1 BHK</option>
+            <option value="2">2 BHK</option>
+            <option value="3">3 BHK</option>
+            <option value="4">4 BHK</option>
+            <option value="5">5+ BHK</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="f-rent">Monthly Rent (₹) *</label>
+          <input type="number" id="f-rent" placeholder="e.g. 25000" min="1000" max="500000" required />
+        </div>
+
+        <div class="form-row">
+          <label>Furnishing *</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="furnishing" data-val="furnished">Furnished</button>
+            <button type="button" class="toggle-btn small" data-field="furnishing" data-val="unfurnished">Unfurnished</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Gated Society *</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="gated" data-val="true">Yes</button>
+            <button type="button" class="toggle-btn small" data-field="gated" data-val="false">No</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Posted by</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="landlord_type" data-val="direct">👤 Direct Landlord</button>
+            <button type="button" class="toggle-btn small" data-field="landlord_type" data-val="broker">🏢 Broker</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Who lives here *</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="who_lives" data-val="family">Family</button>
+            <button type="button" class="toggle-btn small" data-field="who_lives" data-val="bachelor">Bachelor</button>
+            <button type="button" class="toggle-btn small" data-field="who_lives" data-val="anyone">Anyone</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="f-deposit">Deposit (months rent)</label>
+          <select id="f-deposit">
+            <option value="">Select</option>
+            <option value="1">1 month</option>
+            <option value="2">2 months</option>
+            <option value="3">3 months</option>
+            <option value="6">6 months</option>
+            <option value="10">10 months</option>
+            <option value="11">11+ months</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>Pets allowed *</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="pets_allowed" data-val="no">No</button>
+            <button type="button" class="toggle-btn small" data-field="pets_allowed" data-val="yes">Yes</button>
+            <button type="button" class="toggle-btn small" data-field="pets_allowed" data-val="unsure">Not sure</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="f-parking">Parking (car spots)</label>
+          <input type="number" id="f-parking" min="0" max="10" placeholder="0" />
+        </div>
+
+        <div class="form-row">
+          <label for="f-sqft">Square Footage</label>
+          <input type="number" id="f-sqft" min="100" max="20000" placeholder="Optional" />
+        </div>
+
+        <div class="form-row">
+          <label for="f-society">Society / Building Name</label>
+          <input type="text" id="f-society" placeholder="e.g. DLF Summit" maxlength="100" />
+        </div>
+
+        <div class="form-row ncr-field">
+          <label for="f-commute-hub">Nearest Commute Hub</label>
+          <select id="f-commute-hub">
+            <option value="">Select</option>
+            <option value="cyber_hub">Cyber Hub, Gurgaon</option>
+            <option value="cp">Connaught Place</option>
+            <option value="noida_sec62">Noida Sector 62</option>
+            <option value="saket">Saket</option>
+            <option value="dwarka">Dwarka Sector 21</option>
+          </select>
+        </div>
+
+        <div class="form-row ncr-field">
+          <label for="f-water">Water Supply</label>
+          <select id="f-water">
+            <option value="">Select</option>
+            <option value="municipal">Municipal</option>
+            <option value="tanker">Tanker</option>
+            <option value="borewell">Borewell</option>
+            <option value="mixed">Mixed</option>
+          </select>
+        </div>
+
+        <div class="form-row ncr-field">
+          <label for="f-power">Power Cuts</label>
+          <select id="f-power">
+            <option value="">Select</option>
+            <option value="rare">Rare</option>
+            <option value="occasional">Occasional</option>
+            <option value="frequent">Frequent</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="f-one-liner">One-liner about your stay</label>
+          <textarea id="f-one-liner" maxlength="160" rows="2" placeholder="e.g. Near metro, quiet neighborhood, pet-friendly..."></textarea>
+        </div>
+
+        <div class="form-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="f-flatmate" />
+            Looking for a flatmate to fill the other room
+          </label>
+        </div>
+
+        <div class="form-row">
+          <label for="f-email">Your Email (private — never shown)</label>
+          <input type="email" id="f-email" placeholder="owner@email.com" />
+        </div>
+      </div>
+
+      <!-- === SEEKER MODE === -->
+      <div class="form-section hidden" id="form-section-seeker">
+        <div class="form-row">
+          <label>Looking for *</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-seeker-type data-val="whole">Whole Flat</button>
+            <button type="button" class="toggle-btn small" data-seeker-type data-val="room">Room in Flat</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="f-budget">Budget (₹/month) *</label>
+          <input type="number" id="f-budget" min="1000" max="500000" placeholder="e.g. 25000" required />
+        </div>
+
+        <div class="form-row">
+          <label>BHK Preference *</label>
+          <div class="chip-row">
+            <button type="button" class="chip" data-bhk-pref="1">1</button>
+            <button type="button" class="chip" data-bhk-pref="2">2</button>
+            <button type="button" class="chip" data-bhk-pref="3">3</button>
+            <button type="button" class="chip" data-bhk-pref="any">Any</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="f-movein">Move-in *</label>
+          <select id="f-movein" required>
+            <option value="">Select</option>
+            <option value="asap">ASAP</option>
+            <option value="next_month">Next Month</option>
+            <option value="flexible">Flexible</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label>Food preference *</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="food_pref" data-val="veg">Vegetarian</button>
+            <button type="button" class="toggle-btn small" data-field="food_pref" data-val="non_veg">Non-veg</button>
+            <button type="button" class="toggle-btn small" data-field="food_pref" data-val="any">Any</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Smoker OK?</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="smoker_ok" data-val="no_preference">No preference</button>
+            <button type="button" class="toggle-btn small" data-field="smoker_ok" data-val="yes">Yes</button>
+            <button type="button" class="toggle-btn small" data-field="smoker_ok" data-val="no">No</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Preferred flatmate gender</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="gender_pref" data-val="any">Any</button>
+            <button type="button" class="toggle-btn small" data-field="gender_pref" data-val="male">Male</button>
+            <button type="button" class="toggle-btn small" data-field="gender_pref" data-val="female">Female</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="checkbox-label">
+            <input type="checkbox" id="f-parking-needed" />
+            Parking required
+          </label>
+        </div>
+
+        <div class="form-row">
+          <label for="f-lifestyle">Lifestyle note</label>
+          <textarea id="f-lifestyle" maxlength="200" rows="2" placeholder="Tell potential flatmates a bit about yourself..."></textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="f-seeker-email">Your Email (private)</label>
+          <input type="email" id="f-seeker-email" placeholder="your@email.com" />
+        </div>
+
+        <div class="form-row">
+          <label for="f-seeker-phone">Phone (optional)</label>
+          <input type="tel" id="f-seeker-phone" placeholder="+91 98765 43210" />
+        </div>
+      </div>
+
+      <!-- === FLATMATE MODE === -->
+      <div class="form-section hidden" id="form-section-flatmate">
+        <div class="form-row">
+          <label for="f-room-bhk">BHK of flat *</label>
+          <select id="f-room-bhk" required>
+            <option value="">Select BHK</option>
+            <option value="1">1 BHK</option>
+            <option value="2">2 BHK</option>
+            <option value="3">3 BHK</option>
+            <option value="4">4 BHK</option>
+            <option value="5">5+ BHK</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label for="f-room-rent">Rent per room (₹) *</label>
+          <input type="number" id="f-room-rent" min="1000" max="200000" placeholder="e.g. 12000" required />
+        </div>
+
+        <div class="form-row">
+          <label for="f-available-from">Available from *</label>
+          <input type="date" id="f-available-from" required />
+        </div>
+
+        <div class="form-row">
+          <label>Gender preferred *</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="flatmate_gender" data-val="any">Any</button>
+            <button type="button" class="toggle-btn small" data-field="flatmate_gender" data-val="male">Male</button>
+            <button type="button" class="toggle-btn small" data-field="flatmate_gender" data-val="female">Female</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Smoker OK?</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="flatmate_smoker" data-val="no_preference">No preference</button>
+            <button type="button" class="toggle-btn small" data-field="flatmate_smoker" data-val="yes">Yes</button>
+            <button type="button" class="toggle-btn small" data-field="flatmate_smoker" data-val="no">No</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>Food preference</label>
+          <div class="toggle-row">
+            <button type="button" class="toggle-btn small active" data-field="flatmate_food" data-val="any">Any</button>
+            <button type="button" class="toggle-btn small" data-field="flatmate_food" data-val="veg">Vegetarian</button>
+            <button type="button" class="toggle-btn small" data-field="flatmate_food" data-val="non_veg">Non-veg</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label for="f-flatmate-parking">Parking spots</label>
+          <input type="number" id="f-flatmate-parking" min="0" max="5" placeholder="0" />
+        </div>
+
+        <div class="form-row">
+          <label for="f-flatmate-email">Email (private)</label>
+          <input type="email" id="f-flatmate-email" placeholder="your@email.com" />
+        </div>
+
+        <div class="form-row">
+          <label for="f-flatmate-phone">Phone (optional)</label>
+          <input type="tel" id="f-flatmate-phone" placeholder="+91 98765 43210" />
+        </div>
+      </div>
+
+      <!-- Coordinates (hidden) -->
+      <input type="hidden" id="f-lat" />
+      <input type="hidden" id="f-lng" />
+      <input type="hidden" id="f-edit-id" />
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-full" id="btn-submit-pin">
+          Drop Pin on Map
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ===== LIVE STATS MODAL ===== -->
+  <div id="stats-modal" class="modal hidden">
+    <div class="modal-content stats-content">
+      <button class="modal-close" id="stats-close">✕</button>
+      <h2 class="modal-title">Live Rent Stats — Delhi NCR</h2>
+
+      <div class="stats-tabs">
+        <button class="stats-tab active" data-stats-view="averages">Avg by BHK</button>
+        <button class="stats-tab" data-stats-view="leaderboard">Top Rents</button>
+        <button class="stats-tab" data-stats-view="area">Area Stats</button>
+      </div>
+
+      <!-- Averages view -->
+      <div id="stats-averages">
+        <p class="stats-subtitle">Average rent across all NCR listings</p>
+        <div class="stats-toggle-row">
+          <button class="toggle-btn small active" id="btn-overall">Overall</button>
+          <button class="toggle-btn small" id="btn-near-you">Near You</button>
+        </div>
+        <div id="averages-table" class="averages-table">
+          <div class="avg-row">
+            <span class="avg-bhk">1 BHK</span>
+            <span class="avg-bar"><div class="avg-bar-fill" style="width:30%"></div></span>
+            <span class="avg-rent" id="avg-1bhk">₹--</span>
+            <span class="avg-count" id="avg-1bhk-count">-- pins</span>
+          </div>
+          <div class="avg-row">
+            <span class="avg-bhk">2 BHK</span>
+            <span class="avg-bar"><div class="avg-bar-fill" style="width:55%"></div></span>
+            <span class="avg-rent" id="avg-2bhk">₹--</span>
+            <span class="avg-count" id="avg-2bhk-count">-- pins</span>
+          </div>
+          <div class="avg-row">
+            <span class="avg-bhk">3 BHK</span>
+            <span class="avg-bar"><div class="avg-bar-fill" style="width:75%"></div></span>
+            <span class="avg-rent" id="avg-3bhk">₹--</span>
+            <span class="avg-count" id="avg-3bhk-count">-- pins</span>
+          </div>
+          <div class="avg-row">
+            <span class="avg-bhk">4 BHK</span>
+            <span class="avg-bar"><div class="avg-bar-fill" style="width:90%"></div></span>
+            <span class="avg-rent" id="avg-4bhk">₹--</span>
+            <span class="avg-count" id="avg-4bhk-count">-- pins</span>
+          </div>
+          <div class="avg-row">
+            <span class="avg-bhk">5+ BHK</span>
+            <span class="avg-bar"><div class="avg-bar-fill" style="width:100%"></div></span>
+            <span class="avg-rent" id="avg-5bhk">₹--</span>
+            <span class="avg-count" id="avg-5bhk-count">-- pins</span>
+          </div>
+        </div>
+        <p class="stats-note">Based on <span id="total-pins-stat">0</span> active listings</p>
+      </div>
+
+      <!-- Leaderboard view -->
+      <div id="stats-leaderboard" class="hidden">
+        <p class="stats-subtitle">Top 5 highest rents</p>
+        <div id="leaderboard-list"></div>
+      </div>
+
+      <!-- Area stats view -->
+      <div id="stats-area" class="hidden">
+        <p class="stats-subtitle">Draw an area on the map to see stats</p>
+        <button class="btn btn-secondary" id="btn-draw-area">
+          ✏️ Draw Area
+        </button>
+        <div id="area-stats-result" class="hidden">
+          <div class="averages-table" id="area-stats-table"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== WATCH AREA MODAL ===== -->
+  <div id="watch-modal" class="modal hidden">
+    <div class="modal-content modal-sm">
+      <button class="modal-close" id="watch-close">✕</button>
+      <h3 class="modal-title">Watch This Area</h3>
+      <p class="modal-subtitle">Get email alerts when a new flat opens within 1km</p>
+
+      <form id="watch-form">
+        <div class="form-row">
+          <label for="w-duration">Alert duration</label>
+          <select id="w-duration" required>
+            <option value="1">1 month</option>
+            <option value="3" selected>3 months</option>
+            <option value="6">6 months</option>
+            <option value="12">12 months</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="w-email">Email *</label>
+          <input type="email" id="w-email" placeholder="your@email.com" required />
+        </div>
+        <div class="form-row">
+          <label for="w-phone">Phone (optional)</label>
+          <input type="tel" id="w-phone" placeholder="+91 98765 43210" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Set Alert</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== SHARE MODAL ===== -->
+  <div id="share-modal" class="modal hidden">
+    <div class="modal-content modal-sm">
+      <button class="modal-close" id="share-close">✕</button>
+      <h3 class="modal-title">Share Listing</h3>
+      <div class="share-btns">
+        <a id="share-whatsapp" class="btn btn-whatsapp" href="#" target="_blank">📱 WhatsApp</a>
+        <button class="btn btn-secondary" id="btn-copy-link">📋 Copy Link</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== INTEREST MODAL ===== -->
+  <div id="interest-modal" class="modal hidden">
+    <div class="modal-content modal-sm">
+      <button class="modal-close" id="interest-close">✕</button>
+      <h3 class="modal-title">I'm Interested</h3>
+      <p class="modal-subtitle">Your email will be sent to the owner — they won't see your phone number.</p>
+      <form id="interest-form">
+        <div class="form-row">
+          <label for="int-email">Your Email *</label>
+          <input type="email" id="int-email" placeholder="your@email.com" required />
+        </div>
+        <div class="form-row">
+          <label for="int-msg">Message (optional)</label>
+          <textarea id="int-msg" rows="3" placeholder="Hi, I'm interested in your flat..." maxlength="300"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Send Interest</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== LEGEND MODAL ===== -->
+  <div id="legend-modal" class="modal hidden">
+    <div class="modal-content modal-sm">
+      <button class="modal-close" id="legend-close">✕</button>
+      <h3 class="modal-title">Map Legend</h3>
+      <div class="legend-items">
+        <div class="legend-item"><span class="legend-dot" style="background:#22c55e"></span> Gated Society (Rental)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#f97316"></span> Open/Independent (Rental)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span> Seeker (Looking for flat)</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#7c3aed"></span> Flatmate Needed</div>
+        <div class="legend-item"><span class="legend-dot cluster-dot" style="background:#7c3aed"></span> Cluster (hover to expand)</div>
+      </div>
+      <div class="legend-tags">
+        <h4>Pin Tags</h4>
+        <div class="legend-item"><span class="tag-sample">WHOLE AVBL</span> Whole flat available</div>
+        <div class="legend-item"><span class="tag-sample">ROOM AVBL</span> Room available</div>
+        <div class="legend-item"><span class="tag-sample your-pin">YOUR PIN</span> Your own listing</div>
+        <div class="legend-item"><span class="tag-sample flagged">1 report</span> Flagged by community</div>
+        <div class="legend-item"><span class="tag-sample above-avg">Above avg</span> Rent above area average</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== WELCOME MODAL ===== -->
+  <div id="welcome-modal" class="modal hidden">
+    <div class="modal-content welcome-content">
+      <div class="welcome-header">
+        <div class="welcome-icon">📍</div>
+        <h2>Welcome to delhi.rent</h2>
+        <p class="welcome-tagline">We build trust together — anonymously.</p>
+      </div>
+      <div class="welcome-stats">
+        <div class="welcome-stat">
+          <div class="stat-num" id="welcome-pins">—</div>
+          <div class="stat-label">Listings shared</div>
+        </div>
+        <div class="welcome-stat">
+          <div class="stat-num" id="welcome-seekers">—</div>
+          <div class="stat-label">Seekers active</div>
+        </div>
+        <div class="welcome-stat">
+          <div class="stat-num">NCR</div>
+          <div class="stat-label">Coverage</div>
+        </div>
+      </div>
+      <div class="welcome-tips">
+        <div class="welcome-tip">📍 <strong>Drop a pin</strong> anywhere on the map to share or find a listing</div>
+        <div class="welcome-tip">🔍 <strong>Search</strong> your neighbourhood to zoom in</div>
+        <div class="welcome-tip">🛰️ <strong>Green Cover</strong> shows satellite vegetation — spotting farms and open areas</div>
+        <div class="welcome-tip">🚇 <strong>Metro</strong> overlay shows nearby stations</div>
+      </div>
+      <div class="welcome-actions">
+        <button class="btn btn-primary btn-full" id="btn-welcome-drop">📍 Drop a Pin</button>
+        <button class="btn btn-secondary btn-full" id="btn-welcome-explore">Explore the Map</button>
+      </div>
+      <p class="welcome-note">No login required. Your location is rounded to ~100m for privacy.</p>
+    </div>
+  </div>
+
+  <!-- ===== FAQ MODAL ===== -->
+  <div id="faq-modal" class="modal hidden">
+    <div class="modal-content faq-content">
+      <button class="modal-close" id="faq-close">✕</button>
+      <h3 class="modal-title">Frequently Asked Questions</h3>
+      <div class="faq-list">
+        <details class="faq-item"><summary>Is delhi.rent free to use?</summary><p>Yes, completely free. No signup, no login, no fees. We believe access to rental data should be open.</p></details>
+        <details class="faq-item"><summary>How is my privacy protected?</summary><p>Your exact location is rounded to ~111m (3 decimal places) before sharing. Your contact info is only shown to people who click "I'm Interested" — and then only your email is shared, never your phone.</p></details>
+        <details class="faq-item"><summary>Who can see my listing?</summary><p>Everyone. Your listing is anonymous and public. Only you can edit or delete it via your browser's device ID.</p></details>
+        <details class="faq-item"><summary>How do I edit or delete my listing?</summary><p>Click on your own pin (shown with a special marker) and use the Edit or Delete buttons at the bottom of the popup.</p></details>
+        <details class="faq-item"><summary>Can I list a flat I'm looking for?</summary><p>Yes — use "Looking for flat" mode. You can share your budget, BHK preference, gender preference, and lifestyle notes.</p></details>
+        <details class="faq-item"><summary>What do the pin colours mean?</summary><p>Green = gated society rental, Orange = open/independent rental, Blue = seeker (looking for flat), Purple = flatmate needed.</p></details>
+        <details class="faq-item"><summary>What is the Green Cover overlay?</summary><p>Sentinel-2 satellite imagery showing vegetation density. Bright green = dense trees/farms, useful for spotting quiet, green neighbourhoods.</p></details>
+        <details class="faq-item"><summary>How accurate are the metro lines?</summary><p>Metro lines are approximate for display purposes. Zoom in to see actual station markers. Always verify with official DMRC maps.</p></details>
+        <details class="faq-item"><summary>How does "Watch This Area" work?</summary><p>Enter your email and we'll notify you when a new listing appears within 1km of the pinned location for the duration you choose.</p></details>
+        <details class="faq-item"><summary>What happens if a listing is fake or spam?</summary><p>Community members can report listings. Listings with 3+ reports are automatically hidden. We review reports regularly.</p></details>
+        <details class="faq-item"><summary>What's the difference between a broker and direct landlord listing?</summary><p>"Direct" means the owner posted it themselves. "Broker" means a broker or agent posted it. Both are valid — just helps you know who to contact.</p></details>
+        <details class="faq-item"><summary>Can I use delhi.rent on mobile?</summary><p>Yes, it works on any browser. For the best mobile experience, add it to your home screen — it behaves like a native app.</p></details>
+        <details class="faq-item"><summary>How do I share my listing?</summary><p>Click on your pin, then "Share" — you can send a WhatsApp message or copy the link.</p></details>
+        <details class="faq-item"><summary>Is my data sold or used for ads?</summary><p>No. delhi.rent is a community tool. We don't sell data, run ads, or use your information for anything except the service itself.</p></details>
+        <details class="faq-item"><summary>How can I contribute data?</summary><p>Drop a pin on the map! Every listing helps the community. Share what you know — rents, neighbourhood quality, anything relevant.</p></details>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- ================================================================
+       MAIN APPLICATION SCRIPT — SINGLE FILE, NO MODULES
+       All code lives here. No imports, no exports, no build step.
+  ================================================================ -->
+  <script>
+  (function() {
+    'use strict';
+
+    // ============================================================
+    // SECTION 1: CONFIG DATA
+    // ============================================================
+
+    const CONFIG = {
+      SUPABASE_URL:      'https://jbtsojxxryvanyxxdcxt.supabase.co',
+      SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpidHNvanh4cnl2YW55eHhkY3h0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc3MDI4MDQsImV4cCI6MjA5MzI3ODgwNH0.4UtxxySLmrO0GfnxsjjII_rFjlRhWZKxhgy3Xyf4fno',
+      GOOGLE_MAPS_KEY:    'AIzaSyAYWTVV8wHpjQMDLX388HFp2duaNB_BoJU',
+      MAP_CENTER:        { lat: 28.4595, lng: 77.0266 },
+      MAP_ZOOM:           12,
+      PIN_CLUSTER_ZOOM:   14,
+
+      PIN_COLORS: {
+        rental_gated:  '#22c55e',
+        rental_open:   '#f97316',
+        seeker:        '#3b82f6',
+        flatmate:      '#7c3aed',
+        cluster:       '#7c3aed',
+      },
+
+      _satelliteVisible: false,
+      _greenCoverVisible: false,
+      _metroVisible: false,
+      _aqiVisible: false,
+      _expressVisible: false,
+
+      PIN_SIZE:     20,
+      CLUSTER_SIZE: 40,
+
+      METRO_LINES: {
+        red:    '#ee2d24', blue:   '#3b82f6', green:  '#a3e635',
+        yellow: '#06b6d4', orange: '#f59e0b', violet: '#7c3aed',
+        pink:   '#f97316', magenta:'#84cc16', grey:   '#6b7280',
+        rapid:  '#0ea5e9',
+      },
+
+      AQI_COLORS: {
+        good:          '#22c55e',
+        moderate:      '#facc15',
+        unhealthy_sg:  '#f97316',
+        unhealthy:     '#ef4444',
+        very_unhealthy:'#7c3aed',
+      },
+
+      WAQI_BASE_URL: 'https://api.waqi.info/feed',
+
+      COMMUTE_HUBS: [
+        { id: 'cyber_hub',   label: 'Cyber Hub, Gurgaon',   lat: 28.4956, lng: 77.0966 },
+        { id: 'cp',          label: 'Connaught Place, Delhi', lat: 28.6329, lng: 77.2199 },
+        { id: 'noida_sec62', label: 'Noida Sector 62',      lat: 28.6065, lng: 77.3649 },
+        { id: 'saket',       label: 'Saket, Delhi',         lat: 28.5243, lng: 77.2069 },
+        { id: 'dwarka',      label: 'Dwarka Sector 21',     lat: 28.5682, lng: 77.0728 },
+      ],
+
+      EXPRESSWAYS: {
+        nh48: {
+          label: 'NH-48 (Delhi–Jaipur)', color: '#a78bfa',
+          path: [
+            { lat: 28.5700, lng: 76.9500 }, { lat: 28.5300, lng: 77.0100 },
+            { lat: 28.4950, lng: 77.0700 }, { lat: 28.4700, lng: 77.1200 },
+            { lat: 28.4400, lng: 77.1700 }, { lat: 28.4100, lng: 77.2200 },
+          ],
+        },
+        dwarka_exp: {
+          label: 'Dwarka Expressway', color: '#38bdf8',
+          path: [
+            { lat: 28.6100, lng: 76.9900 }, { lat: 28.5900, lng: 77.0200 },
+            { lat: 28.5650, lng: 77.0500 }, { lat: 28.5450, lng: 77.0700 },
+            { lat: 28.5200, lng: 77.0900 }, { lat: 28.4900, lng: 77.1000 },
+          ],
+        },
+        yamuna_exp: {
+          label: 'Yamuna Expressway', color: '#4ade80',
+          path: [
+            { lat: 28.5800, lng: 77.5000 }, { lat: 28.5600, lng: 77.4200 },
+            { lat: 28.5400, lng: 77.3300 }, { lat: 28.5200, lng: 77.2600 },
+            { lat: 28.5000, lng: 77.2000 },
+          ],
+        },
+      },
+
+      SECTOR_LABELS: {
+        gurgaon: [
+          { name: 'Sector 14', lat: 28.4597, lng: 77.0266 }, { name: 'Sector 15', lat: 28.4648, lng: 77.0361 },
+          { name: 'Sector 17', lat: 28.4690, lng: 77.0185 }, { name: 'Sector 21', lat: 28.4698, lng: 77.0476 },
+          { name: 'Sector 22', lat: 28.4713, lng: 77.0346 }, { name: 'Sector 23', lat: 28.4746, lng: 77.0439 },
+          { name: 'Sector 28', lat: 28.4832, lng: 77.0515 }, { name: 'Sector 29', lat: 28.4870, lng: 77.0411 },
+          { name: 'Sector 30', lat: 28.4910, lng: 77.0320 }, { name: 'Sector 31', lat: 28.4950, lng: 77.0400 },
+          { name: 'Sector 39', lat: 28.4550, lng: 77.0650 }, { name: 'Sector 40', lat: 28.4500, lng: 77.0550 },
+          { name: 'Sector 44', lat: 28.4440, lng: 77.0550 }, { name: 'Sector 45', lat: 28.4420, lng: 77.0470 },
+          { name: 'Sector 46', lat: 28.4400, lng: 77.0380 }, { name: 'Sector 47', lat: 28.4350, lng: 77.0520 },
+          { name: 'Sector 48', lat: 28.4300, lng: 77.0600 }, { name: 'Sector 49', lat: 28.4230, lng: 77.0570 },
+          { name: 'Sector 50', lat: 28.4170, lng: 77.0510 }, { name: 'Sector 51', lat: 28.4130, lng: 77.0620 },
+          { name: 'Sector 52', lat: 28.4090, lng: 77.0730 }, { name: 'Sector 53', lat: 28.4050, lng: 77.0670 },
+          { name: 'Sector 54', lat: 28.4000, lng: 77.0600 }, { name: 'Sector 55', lat: 28.3950, lng: 77.0530 },
+          { name: 'Sector 56', lat: 28.3900, lng: 77.0460 }, { name: 'Sector 57', lat: 28.3850, lng: 77.0390 },
+          { name: 'Sector 58', lat: 28.3800, lng: 77.0320 }, { name: 'Sector 59', lat: 28.3750, lng: 77.0250 },
+          { name: 'Sector 60', lat: 28.3700, lng: 77.0180 }, { name: 'Sector 61', lat: 28.3650, lng: 77.0110 },
+          { name: 'Sector 62', lat: 28.3600, lng: 77.0040 }, { name: 'Sector 63', lat: 28.3550, lng: 76.9970 },
+          { name: 'Sector 66', lat: 28.4250, lng: 77.0820 }, { name: 'Sector 67', lat: 28.4180, lng: 77.0900 },
+          { name: 'Sector 69', lat: 28.4080, lng: 77.1000 }, { name: 'Sector 70', lat: 28.4000, lng: 77.0950 },
+          { name: 'Sector 71', lat: 28.3930, lng: 77.0880 }, { name: 'Sector 72', lat: 28.3860, lng: 77.0810 },
+          { name: 'Sector 73', lat: 28.3790, lng: 77.0740 }, { name: 'Sector 74', lat: 28.3720, lng: 77.0670 },
+          { name: 'Sector 75', lat: 28.3650, lng: 77.0600 }, { name: 'Sector 76', lat: 28.3580, lng: 77.0530 },
+          { name: 'Sector 77', lat: 28.3510, lng: 77.0460 }, { name: 'Sector 78', lat: 28.3440, lng: 77.0390 },
+          { name: 'Sector 82', lat: 28.3950, lng: 77.1100 }, { name: 'Sector 83', lat: 28.3880, lng: 77.1180 },
+          { name: 'Sector 84', lat: 28.3810, lng: 77.1260 }, { name: 'Sector 85', lat: 28.3740, lng: 77.1340 },
+          { name: 'DLF Phase 1', lat: 28.4713, lng: 77.0759 }, { name: 'DLF Phase 2', lat: 28.4671, lng: 77.0982 },
+          { name: 'DLF Phase 3', lat: 28.4599, lng: 77.1107 }, { name: 'DLF Phase 4', lat: 28.4530, lng: 77.1040 },
+          { name: 'DLF Phase 5', lat: 28.4430, lng: 77.0970 }, { name: 'MG Road', lat: 28.4756, lng: 77.0705 },
+          { name: 'Udyog Vihar', lat: 28.4897, lng: 77.0485 },
+        ],
+        noida: [
+          { name: 'Sector 1', lat: 28.6437, lng: 77.3562 }, { name: 'Sector 2', lat: 28.6395, lng: 77.3610 },
+          { name: 'Sector 15', lat: 28.6065, lng: 77.3549 }, { name: 'Sector 18', lat: 28.5987, lng: 77.3498 },
+          { name: 'Sector 62', lat: 28.5982, lng: 77.3629 }, { name: 'Sector 63', lat: 28.5920, lng: 77.3680 },
+        ],
+        delhi: [
+          { name: 'Lajpat Nagar', lat: 28.5684, lng: 77.2436 }, { name: 'Saket', lat: 28.5243, lng: 77.2069 },
+          { name: 'Vasant Kunj', lat: 28.5175, lng: 77.1587 }, { name: 'Hauz Khas', lat: 28.5488, lng: 77.2012 },
+          { name: 'Rohini', lat: 28.7169, lng: 77.1147 }, { name: 'Dwarka', lat: 28.5871, lng: 77.0461 },
+          { name: 'Janakpuri', lat: 28.6210, lng: 77.0856 }, { name: 'Karol Bagh', lat: 28.6519, lng: 77.1908 },
+          { name: 'Greater Kailash', lat: 28.5451, lng: 77.2347 }, { name: 'Nehru Place', lat: 28.5503, lng: 77.2519 },
+          { name: 'Okhla', lat: 28.5357, lng: 77.2710 },
+        ],
+      },
+
+      CLUSTER_STYLES: [
+        { width: 40, height: 40, background: '#7c3aed', border: '#a78bfa', fontSize: 12 },
+        { width: 50, height: 50, background: '#6d28d9', border: '#a78bfa', fontSize: 13 },
+        { width: 60, height: 60, background: '#5b21b6', border: '#c4b5fd', fontSize: 14 },
+      ],
+    };
+
+    // Runtime state (not in CONFIG to avoid polluting the object)
+
+    // ============================================================
+    // SECTION 2: AUTH — Device ID + IP
+    // ============================================================
+
+    const Auth = (() => {
+      const DEVICE_ID_KEY = 'delhi_rent_device_id';
+      let _deviceId = null;
+
+      function generateUUID() {
+        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+          (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+      }
+
+      function getDeviceId() {
+        if (_deviceId) return _deviceId;
+        _deviceId = localStorage.getItem(DEVICE_ID_KEY);
+        if (!_deviceId) {
+          _deviceId = generateUUID();
+          localStorage.setItem(DEVICE_ID_KEY, _deviceId);
+        }
+        return _deviceId;
+      }
+
+      async function fetchIP() {
+        try {
+          const res = await fetch('https://api.ipify.org?format=json');
+          const json = await res.json();
+          return json.ip;
+        } catch {
+          return null;
+        }
+      }
+
+      async function init(supabase) {
+        const did = getDeviceId();
+        try { await supabase.rpc('set_config', { key: 'app.device_id', value: did }); } catch (_) {}
+        return did;
+      }
+
+      return { getDeviceId, fetchIP, init };
+    })();
+
+    // ============================================================
+    // SECTION 3: FILTERS — State + Listener pattern
+    // ============================================================
+
+    const filterState = {
+      pinView:    'rental',
+      bhk:        [],
+      minRent:    null,
+      maxRent:    null,
+      furnishing: null,
+      gated:      null,
+      rating:     null,
+      metroDist:  null,
+      commuteHub: null,
+    };
+
+    const filterListeners = [];
+
+    function onFilterChange(fn) {
+      filterListeners.push(fn);
+    }
+
+    function emitFilterChange() {
+      const snapshot = { ...filterState, bhk: [...filterState.bhk] };
+      filterListeners.forEach(fn => fn(snapshot));
+    }
+
+    function toggleBHK(bhk) {
+      const idx = filterState.bhk.indexOf(bhk);
+      if (idx === -1) filterState.bhk.push(bhk);
+      else filterState.bhk.splice(idx, 1);
+      updateActiveFilterChips();
+      emitFilterChange();
+    }
+
+    function togglePinView(view) {
+      filterState.pinView = view;
+      emitFilterChange();
+    }
+
+    function setFilter(key, value) {
+      filterState[key] = value;
+      updateActiveFilterChips();
+      emitFilterChange();
+    }
+
+    function clearAllFilters() {
+      filterState.bhk        = [];
+      filterState.minRent    = null;
+      filterState.maxRent    = null;
+      filterState.furnishing = null;
+      filterState.gated      = null;
+      filterState.rating     = null;
+      filterState.metroDist  = null;
+      filterState.commuteHub = null;
+      updateActiveFilterChips();
+      emitFilterChange();
+    }
+
+    function matchesFilters(pin) {
+      const f = filterState;
+      if (f.pinView !== 'both' && pin.type !== f.pinView) return false;
+      if (f.bhk.length > 0 && !f.bhk.includes(pin.bhk)) return false;
+      if (f.minRent && pin.rent < f.minRent) return false;
+      if (f.maxRent && pin.rent > f.maxRent) return false;
+      if (f.furnishing && pin.furnishing !== f.furnishing) return false;
+      if (f.gated !== null && pin.gated !== f.gated) return false;
+      return true;
+    }
+
+    function updateActiveFilterChips() {
+      const container = document.getElementById('active-filters');
+      if (!container) return;
+      const chips = [];
+      if (filterState.bhk.length)
+        chips.push({ label: `BHK: ${filterState.bhk.join(',')}`, key: 'bhk' });
+      if (filterState.minRent || filterState.maxRent)
+        chips.push({ label: `₹${filterState.minRent || 0}–${filterState.maxRent || '∞'}`, key: 'rent' });
+      if (filterState.furnishing)
+        chips.push({ label: filterState.furnishing, key: 'furnishing' });
+      if (filterState.gated !== null)
+        chips.push({ label: filterState.gated ? 'Gated' : 'Open', key: 'gated' });
+      if (filterState.rating)
+        chips.push({ label: `${filterState.rating}★+`, key: 'rating' });
+
+      container.innerHTML = chips.map(c => `
+        <span class="active-chip">${c.label}
+          <button data-key="${c.key}" style="background:none;border:none;color:inherit;cursor:pointer;padding:0 0 0 4px">✕</button>
+        </span>`).join('');
+
+      container.querySelectorAll('button[data-key]').forEach(btn => {
+        btn.addEventListener('click', () => clearFilterKey(btn.dataset.key));
+      });
+    }
+
+    function clearFilterKey(key) {
+      if (key === 'bhk')         filterState.bhk = [];
+      else if (key === 'rent')  { filterState.minRent = null; filterState.maxRent = null; }
+      else if (key === 'furnishing') filterState.furnishing = null;
+      else if (key === 'gated')  filterState.gated = null;
+      else if (key === 'rating') filterState.rating = null;
+      updateActiveFilterChips();
+      emitFilterChange();
+    }
+
+    // ============================================================
+    // SECTION 4: MAP — Google Maps init, clustering, pins
+    // ============================================================
+
+    const DARK_MAP_STYLE = [
+      { elementType: 'geometry',        stylers: [{ color: '#1a1040' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#a78bfa' }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: '#0f0f1a' }] },
+      { featureType: 'administrative',   elementType: 'geometry.stroke', stylers: [{ color: '#2d1b69' }] },
+      { featureType: 'poi',             stylers: [{ visibility: 'off' }] },
+      { featureType: 'road',            elementType: 'geometry',       stylers: [{ color: '#241a4a' }] },
+      { featureType: 'road',            elementType: 'labels.icon',   stylers: [{ visibility: 'off' }] },
+      { featureType: 'road.highway',    elementType: 'geometry',       stylers: [{ color: '#3d2b7a' }] },
+      { featureType: 'transit',          stylers: [{ visibility: 'off' }] },
+      { featureType: 'water',            elementType: 'geometry',       stylers: [{ color: '#0d1f3c' }] },
+    ];
+
+    let mapInstance         = null;
+    let mc                 = null;  // eslint-disable-line
+    const markersByPinId   = {};   // pinId -> google.maps.Marker
+    const allPins          = [];   // raw pin data from Supabase
+
+    function pinColor(pin) {
+      if (pin.type === 'seeker')    return CONFIG.PIN_COLORS.seeker;
+      if (pin.type === 'flatmate')  return CONFIG.PIN_COLORS.flatmate;
+      return pin.gated ? CONFIG.PIN_COLORS.rental_gated : CONFIG.PIN_COLORS.rental_open;
+    }
+
+    function clusterIcon(count) {
+      const style = CONFIG.CLUSTER_STYLES[Math.min(CONFIG.CLUSTER_STYLES.length - 1, Math.floor(Math.log10(count)))];
+      const label = count >= 100 ? '99+' : String(count);
+      return {
+        html: `<div style="width:${style.width}px;height:${style.height}px;background:${style.background};border:${style.border} 2px solid;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:${style.fontSize}px;font-weight:700;color:#fff;font-family:Inter,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.4);line-height:1">${label}</div>`,
+        anchor: new google.maps.Point(style.width / 2, style.height / 2),
+      };
+    }
+
+    function initMap() {
+      const el = document.getElementById('map');
+      if (!el) { console.error('[delhi.rent] No #map element'); return null; }
+
+      mapInstance = new google.maps.Map(el, {
+        center: CONFIG.MAP_CENTER,
+        zoom: CONFIG.MAP_ZOOM,
+        styles: DARK_MAP_STYLE,
+        disableDefaultUI: false,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+        clickableIcons: false,
+        mapTypeId: google.maps.MapTypeId.HYBRID,
+      });
+
+      // Google Places Autocomplete for search bar
+      const searchInput = document.getElementById('search-input');
+      const searchResults = document.getElementById('search-results');
+      if (searchInput && mapInstance) {
+        const ac = new google.maps.places.Autocomplete(searchInput, {
+          types: ['(regions)'],
+          componentRestrictions: { country: 'in' },
+        });
+        ac.setFields(['name', 'geometry', 'types', 'formatted_address']);
+        ac.addListener('place_changed', () => {
+          const place = ac.getPlace();
+          if (!place || !place.geometry) return;
+          if (place.geometry.location) {
+            mapInstance.panTo(place.geometry.location);
+            mapInstance.setZoom(14);
+          }
+          searchResults.classList.add('hidden');
+          searchInput.value = place.formatted_address || place.name || '';
+        });
+        searchInput.addEventListener('input', () => {
+          if (!searchInput.value.trim()) searchResults.classList.add('hidden');
+        });
+        searchInput.addEventListener('focus', () => {
+          // show results if we have predictions cached
+          if (searchResults.children.length > 0) searchResults.classList.remove('hidden');
+        });
+      }
+
+      mc = new markerClusterer.MarkerClusterer({
+        map: mapInstance,
+        markers: [],
+        renderer: {
+          render: ({ count, position }) => {
+            return new google.maps.Marker({
+              position,
+              icon: clusterIcon(count),
+              zIndex: 10,
+              clickable: true,
+            });
+          },
+        },
+      });
+
+      // Click on map → open pin form
+      mapInstance.addListener('click', (e) => {
+        window.delhiRentApp && window.delhiRentApp.openFormAt(e.latLng.lat(), e.latLng.lng());
+      });
+
+      // On idle → update overlays
+      google.maps.event.addListener(mapInstance, 'idle', () => {
+        const bounds = mapInstance.getBounds();
+        const zoom = mapInstance.getZoom();
+        onMapIdle(bounds, zoom);
+      });
+
+      return mapInstance;
+    }
+
+    function addPin(pin) {
+      if (markersByPinId[pin.id]) return; // already rendered
+
+      const marker = new google.maps.Marker({
+        position: { lat: pin.lat, lng: pin.lng },
+        map: mapInstance,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: CONFIG.PIN_SIZE / 2,
+          fillColor: pinColor(pin),
+          fillOpacity: 0.9,
+          strokeColor: '#fff',
+          strokeWeight: 1.5,
+        },
+        title: `₹${pin.rent.toLocaleString('en-IN')} · ${pin.bhk} BHK`,
+        zIndex: 5,
+      });
+
+      marker.addListener('click', () => {
+        window.delhiRentApp && window.delhiRentApp.showPinPopup(pin);
+      });
+
+      markersByPinId[pin.id] = marker;
+      mc.addMarker(marker);
+      mc.repaint();
+    }
+
+    function removePin(pinId) {
+      const marker = markersByPinId[pinId];
+      if (marker) {
+        mc.removeMarker(marker);
+        marker.setMap(null);
+        delete markersByPinId[pinId];
+        mc.repaint();
+      }
+    }
+
+    function clearPins() {
+      mc.clearMarkers();
+      Object.values(markersByPinId).forEach(m => m.setMap(null));
+      Object.keys(markersByPinId).forEach(k => delete markersByPinId[k]);
+    }
+
+    function fitToBounds(pins) {
+      if (!pins || pins.length === 0) return;
+      const bounds = new google.maps.LatLngBounds();
+      pins.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }));
+      mapInstance.fitBounds(bounds, { padding: 60, maxZoom: 14 });
+    }
+
+    // ============================================================
+    // SECTION 5: METRO — DMRC Lines + stations
+    // ============================================================
+
+    const DMRC_LINES = {
+      red: {
+        label: 'Red Line', color: CONFIG.METRO_LINES.red,
+        stations: [
+          { name: 'Shaheed Stadium', lat: 28.6505, lng: 77.2384 }, { name: 'Kashmere Gate', lat: 28.6680, lng: 77.2080 },
+          { name: 'Tis Hazari', lat: 28.6724, lng: 77.2012 }, { name: 'Pul Bangash', lat: 28.6770, lng: 77.1951 },
+          { name: 'Pratap Nagar', lat: 28.6813, lng: 77.1889 }, { name: 'Shastri Nagar', lat: 28.6849, lng: 77.1825 },
+          { name: 'Inderlok', lat: 28.6891, lng: 77.1758 }, { name: 'Kanhiya Nagar', lat: 28.6937, lng: 77.1696 },
+          { name: 'Keshav Puram', lat: 28.6983, lng: 77.1633 }, { name: 'Rohini East', lat: 28.7206, lng: 77.1320 },
+          { name: 'Jahangirpuri', lat: 28.7256, lng: 77.1243 },
+        ],
+      },
+      blue: {
+        label: 'Blue Line', color: CONFIG.METRO_LINES.blue,
+        stations: [
+          { name: 'Dwarka Sec 21', lat: 28.5682, lng: 77.0728 }, { name: 'Dwarka Sec 11', lat: 28.5765, lng: 77.0085 },
+          { name: 'Janakpuri East', lat: 28.6210, lng: 77.0856 }, { name: 'Rajouri Garden', lat: 28.6431, lng: 77.1230 },
+          { name: 'Karol Bagh', lat: 28.6519, lng: 77.1908 }, { name: 'Rajiv Chowk', lat: 28.6329, lng: 77.2199 },
+          { name: 'Mandi House', lat: 28.6205, lng: 77.2325 }, { name: 'Yamuna Bank', lat: 28.5972, lng: 77.2639 },
+          { name: 'Akshardham', lat: 28.5915, lng: 77.2724 }, { name: 'Mayur Vihar-I', lat: 28.5794, lng: 77.2851 },
+          { name: 'Noida City Centre', lat: 28.5703, lng: 77.3487 },
+        ],
+      },
+      yellow: {
+        label: 'Yellow Line', color: CONFIG.METRO_LINES.yellow,
+        stations: [
+          { name: 'Samaypur Badli', lat: 28.7405, lng: 77.1272 }, { name: 'Kashmere Gate', lat: 28.6680, lng: 77.2080 },
+          { name: 'New Delhi', lat: 28.6441, lng: 77.2169 }, { name: 'Rajiv Chowk', lat: 28.6329, lng: 77.2199 },
+          { name: 'INA', lat: 28.5872, lng: 77.2078 }, { name: 'AIIMS', lat: 28.5691, lng: 77.2078 },
+          { name: 'Hauz Khas', lat: 28.5488, lng: 77.2012 }, { name: 'Malviya Nagar', lat: 28.5379, lng: 77.2072 },
+          { name: 'Saket', lat: 28.5243, lng: 77.2069 }, { name: 'Gurgaon', lat: 28.4785, lng: 77.2252 },
+          { name: 'Sikanderpur', lat: 28.4681, lng: 77.2805 },
+        ],
+      },
+      green: {
+        label: 'Green Line', color: CONFIG.METRO_LINES.green,
+        stations: [
+          { name: 'Kirti Nagar', lat: 28.6556, lng: 77.1498 }, { name: 'Ashok Park Main', lat: 28.6622, lng: 77.1486 },
+          { name: 'Punjabi Bagh East', lat: 28.6711, lng: 77.1325 }, { name: 'Shalimar Bagh', lat: 28.6810, lng: 77.1262 },
+          { name: 'Jahangirpuri', lat: 28.7256, lng: 77.1243 },
+        ],
+      },
+      violet: {
+        label: 'Violet Line', color: CONFIG.METRO_LINES.violet,
+        stations: [
+          { name: 'Kashmere Gate', lat: 28.6680, lng: 77.2080 }, { name: 'ITO', lat: 28.6189, lng: 77.2411 },
+          { name: 'Mandi House', lat: 28.6205, lng: 77.2325 }, { name: 'Nehru Place', lat: 28.5503, lng: 77.2519 },
+          { name: 'Greater Kailash', lat: 28.5451, lng: 77.2347 }, { name: 'Okhla', lat: 28.5357, lng: 77.2710 },
+        ],
+      },
+      orange: {
+        label: 'Orange Line', color: CONFIG.METRO_LINES.orange,
+        stations: [
+          { name: 'New Delhi', lat: 28.6441, lng: 77.2169 }, { name: 'Shivaji Stadium', lat: 28.6372, lng: 77.2083 },
+          { name: 'Dhaula Kuan', lat: 28.6243, lng: 77.1973 }, { name: 'IGI Airport T3', lat: 28.5624, lng: 77.0710 },
+        ],
+      },
+      pink: {
+        label: 'Pink Line', color: CONFIG.METRO_LINES.pink,
+        stations: [
+          { name: 'Majlis Park', lat: 28.7423, lng: 77.1058 }, { name: 'Azadpur', lat: 28.7166, lng: 77.1102 },
+          { name: 'Shalimar Bagh', lat: 28.6810, lng: 77.1262 }, { name: 'Rajouri Garden', lat: 28.6431, lng: 77.1230 },
+        ],
+      },
+      magenta: {
+        label: 'Magenta Line', color: CONFIG.METRO_LINES.magenta,
+        stations: [
+          { name: 'Janakpuri West', lat: 28.6278, lng: 77.0828 }, { name: 'Dabri Mor', lat: 28.6225, lng: 77.0713 },
+          { name: 'Palam', lat: 28.6107, lng: 77.0449 }, { name: 'IGI Airport T3', lat: 28.5624, lng: 77.0710 },
+        ],
+      },
+      grey: {
+        label: 'Grey Line', color: CONFIG.METRO_LINES.grey,
+        stations: [
+          { name: 'Dwarka Sec 21', lat: 28.5682, lng: 77.0728 }, { name: 'Najafgarh', lat: 28.6095, lng: 76.9254 },
+        ],
+      },
+    };
+
+    let metroPolylines   = [];
+    let metroMarkers     = [];
+
+    function renderMetroLines() {
+      Object.values(DMRC_LINES).forEach(line => {
+        const poly = new google.maps.Polyline({
+          path: line.stations.map(s => ({ lat: s.lat, lng: s.lng })),
+          strokeColor: line.color,
+          strokeWeight: 4,
+          strokeOpacity: 0.85,
+          map: CONFIG._metroVisible ? mapInstance : null,
+          zIndex: 2,
+        });
+        metroPolylines.push(poly);
+
+        line.stations.forEach(station => {
+          const marker = new google.maps.Marker({
+            position: { lat: station.lat, lng: station.lng },
+            map: null,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 4,
+              fillColor: line.color,
+              fillOpacity: 0.9,
+              strokeColor: '#fff',
+              strokeWeight: 1,
+            },
+            title: station.name,
+            zIndex: 3,
+          });
+          metroMarkers.push(marker);
+        });
+      });
+    }
+
+    function toggleMetro(show) {
+      CONFIG._metroVisible = show;
+      metroPolylines.forEach(p => p.setMap(show ? mapInstance : null));
+      updateMetroStationVisibility(mapInstance.getZoom());
+    }
+
+    function updateMetroStationVisibility(zoom) {
+      const show = CONFIG._metroVisible && zoom >= 13;
+      metroMarkers.forEach(m => m.setMap(show ? mapInstance : null));
+    }
+
+    // ============================================================
+    // SECTION 6: AQI — WAQI API overlay
+    // ============================================================
+
+    const AQI_BREAKPOINTS = [
+      { max: 50,  label: 'Good',          color: CONFIG.AQI_COLORS.good },
+      { max: 100, label: 'Moderate',      color: CONFIG.AQI_COLORS.moderate },
+      { max: 200, label: 'Unhealthy (SG)', color: CONFIG.AQI_COLORS.unhealthy_sg },
+      { max: 300, label: 'Unhealthy',      color: CONFIG.AQI_COLORS.unhealthy },
+      { max: 500, label: 'Very Unhealthy', color: CONFIG.AQI_COLORS.very_unhealthy },
+    ];
+
+    let aqiCircles     = [];
+    let aqiLegendEl    = null;
+
+    function aqiColor(aqi) {
+      for (const bp of AQI_BREAKPOINTS) { if (aqi <= bp.max) return bp.color; }
+      return CONFIG.AQI_COLORS.very_unhealthy;
+    }
+
+    function aqiLabel(aqi) {
+      for (const bp of AQI_BREAKPOINTS) { if (aqi <= bp.max) return bp.label; }
+      return 'Hazardous';
+    }
+
+    async function fetchAQIForBounds(bounds) {
+      const ne = bounds.getNorthEast();
+      const sw = bounds.getSouthWest();
+      const points = [
+        { lat: (ne.lat() + sw.lat()) / 2, lng: (ne.lng() + sw.lng()) / 2 },
+        { lat: ne.lat(), lng: ne.lng() },
+        { lat: sw.lat(), lng: sw.lng() },
+      ];
+
+      const results = await Promise.allSettled(
+        points.map(({ lat, lng }) =>
+          fetch(`${CONFIG.WAQI_BASE_URL}/geo:${lat.toFixed(2)}:${lng.toFixed(2)}/?token=`)
+            .then(r => r.json())
+            .then(d => ({ lat, lng, aqi: d.data?.aqi, color: d.data?.aqi ? aqiColor(d.data.aqi) : null }))
+            .catch(() => null)
+        )
+      );
+
+      return results.filter(r => r.status === 'fulfilled' && r.value?.aqi).map(r => r.value);
+    }
+
+    function renderAQIZones(aqiPoints) {
+      clearAQIZones();
+      aqiPoints.forEach(point => {
+        const circle = new google.maps.Circle({
+          center: { lat: point.lat, lng: point.lng },
+          radius: 3000,
+          fillColor: point.color,
+          fillOpacity: 0.12,
+          strokeColor: point.color,
+          strokeWeight: 1,
+          strokeOpacity: 0.4,
+          map: CONFIG._aqiVisible ? mapInstance : null,
+          zIndex: 1,
+        });
+        aqiCircles.push(circle);
+      });
+    }
+
+    function clearAQIZones() {
+      aqiCircles.forEach(c => c.setMap(null));
+      aqiCircles = [];
+    }
+
+    function toggleAQI(show, bounds) {
+      CONFIG._aqiVisible = show;
+      aqiCircles.forEach(c => c.setMap(show ? mapInstance : null));
+      if (aqiLegendEl) aqiLegendEl.style.display = show ? 'flex' : 'none';
+      if (show && bounds) {
+        fetchAQIForBounds(bounds).then(renderAQIZones);
+      }
+    }
+
+    function renderAQILegend(container) {
+      aqiLegendEl = document.createElement('div');
+      aqiLegendEl.id = 'aqi-legend';
+      aqiLegendEl.style.cssText = 'position:absolute;bottom:50px;left:12px;background:rgba(15,15,26,0.92);backdrop-filter:blur(8px);border:1px solid rgba(124,58,237,0.25);border-radius:10px;padding:10px 14px;z-index:10;font-family:Inter,sans-serif;display:none;flex-direction:column;gap:5px;font-size:11px';
+      aqiLegendEl.innerHTML = `<div style="font-weight:700;color:#e2e8f0;margin-bottom:4px">🌬 AQI Overlay</div>` +
+        AQI_BREAKPOINTS.map(bp =>
+          `<div style="display:flex;align-items:center;gap:8px">
+            <span style="width:12px;height:12px;border-radius:50%;background:${bp.color};flex-shrink:0"></span>
+            <span style="color:#9ca3af">${bp.max === 500 ? '301+' : '0-' + bp.max}</span>
+            <span style="color:#e2e8f0;font-weight:600">${bp.label}</span>
+          </div>`).join('');
+      container.appendChild(aqiLegendEl);
+    }
+
+    // ============================================================
+    // SECTION 7: EXPRESSWAYS
+    // ============================================================
+
+    let expressOverlays = [];
+
+    function renderExpressways() {
+      Object.values(CONFIG.EXPRESSWAYS).forEach(exp => {
+        const poly = new google.maps.Polyline({
+          path: exp.path.map(p => ({ lat: p.lat, lng: p.lng })),
+          strokeColor: exp.color,
+          strokeWeight: 3,
+          strokeOpacity: 0.7,
+          map: CONFIG._expressVisible ? mapInstance : null,
+          zIndex: 2,
+        });
+        expressOverlays.push(poly);
+      });
+    }
+
+    function toggleExpressways(show) {
+      CONFIG._expressVisible = show;
+      expressOverlays.forEach(p => p.setMap(show ? mapInstance : null));
+    }
+
+    // ============================================================
+    // SECTION 8: SECTOR LABELS
+    // ============================================================
+
+    let sectorMarkers = [];
+
+    function renderSectorLabels() {
+      const all = [
+        ...(CONFIG.SECTOR_LABELS.gurgaon || []),
+        ...(CONFIG.SECTOR_LABELS.noida   || []),
+        ...(CONFIG.SECTOR_LABELS.delhi   || []),
+      ];
+      all.forEach(sec => {
+        const marker = new google.maps.Marker({
+          position: { lat: sec.lat, lng: sec.lng },
+          map: null,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
+          label: {
+            text: sec.name,
+            color: 'rgba(167,139,250,0.7)',
+            fontSize: '11px',
+            fontWeight: '700',
+            fontFamily: 'Inter, sans-serif',
+          },
+          zIndex: 1,
+        });
+        sectorMarkers.push(marker);
+      });
+    }
+
+    function updateSectorLabelVisibility(zoom) {
+      const show = zoom >= 12;
+      const fontSize = zoom >= 14 ? '12px' : '10px';
+      sectorMarkers.forEach(m => {
+        if (m.label) m.label.fontSize = fontSize;
+        m.setMap(show ? mapInstance : null);
+      });
+    }
+
+    // ============================================================
+    // SECTION 8b: GREEN COVER — Copernicus Sentinel-2
+    // ============================================================
+
+    let greenCoverTileLayer = null;
+
+    function toggleGreenCover(show) {
+      CONFIG._greenCoverVisible = show;
+      if (!mapInstance) return;
+      if (!greenCoverTileLayer) {
+        greenCoverTileLayer = new google.maps.ImageMapType({
+          getTileUrl: (coord, zoom) => {
+            const [x, y] = [coord.x, coord.y];
+            // Copernicus Sentinel-2 Global Coverage via GEOLAND2/VITO proxy
+            const left   = (x / Math.pow(2, zoom)) * 360 - 180;
+            const top    = (y / Math.pow(2, zoom)) * 180 - 90;
+            const right  = ((x + 1) / Math.pow(2, zoom)) * 360 - 180;
+            const bottom = ((y + 1) / Math.pow(2, zoom)) * 180 - 90;
+            return `https://geoserver.terranighe.baia.ra.it/geoserver/wms?service=WMS&request=GetMap&layers=vegetation&styles=&format=image%2Fpng&crs=EPSG%3A4326&width=256&height=256&bbox=${left},${bottom},${right},${top}&transparent=true&opacity=0.4`;
+          },
+          tileSize: new google.maps.Size(256, 256),
+          opacity: 0.4,
+          isPng: true,
+        });
+      }
+      if (show) {
+        mapInstance.overlayMapTypes.setAt(0, greenCoverTileLayer);
+      } else {
+        mapInstance.overlayMapTypes.clear();
+      }
+    }
+
+    // ============================================================
+    // SECTION 9: UI — Modals, Toasts, Popups
+    // ============================================================
+
+    let toastTimer      = null;
+    let currentPopupPin  = null;
+
+    function openModal(id)   { document.getElementById(id)?.classList.remove('hidden'); }
+    function closeModal(id)   { document.getElementById(id)?.classList.add('hidden'); }
+
+    function showToast(message, type = '') {
+      const el = document.getElementById('toast');
+      if (!el) return;
+      el.textContent = message;
+      el.className = `toast ${type}`;
+      el.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.add('hidden'), 3000);
+    }
+
+    function timeAgo(date) {
+      const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+      const intervals = [
+        { label: 'year',  s: 31536000 }, { label: 'month', s: 2592000 },
+        { label: 'week',  s: 604800 },   { label: 'day',   s: 86400 },
+        { label: 'hour',  s: 3600 },    { label: 'min',   s: 60 },
+      ];
+      for (const { label, s } of intervals) {
+        const n = Math.floor(seconds / s);
+        if (n >= 1) return `${n} ${label}${n > 1 ? 's' : ''}`;
+      }
+      return 'just now';
+    }
+
+    function showPinPopup(pin) {
+      currentPopupPin = pin;
+      const popup = document.getElementById('pin-popup');
+      if (!popup) return;
+
+      document.getElementById('popup-rent').textContent = `₹${pin.rent.toLocaleString('en-IN')}`;
+
+      const badgesEl = document.getElementById('popup-badges');
+      badgesEl.innerHTML = `
+        <span class="badge badge-bhk">${pin.bhk} BHK</span>
+        ${pin.furnishing ? `<span class="badge badge-fulfill">${pin.furnishing}</span>` : ''}
+      `;
+
+      const tagsEl = document.getElementById('popup-tags');
+      const tags = [
+        pin.gated !== null && `<span class="popup-tag">${pin.gated ? '🏘 Gated' : '🏚 Open'}</span>`,
+        pin.landlord_type === 'direct' && '<span class="popup-tag">👤 Direct Landlord</span>',
+        pin.landlord_type === 'broker' && '<span class="popup-tag">🏢 Broker</span>',
+        pin.pets_allowed === 'yes' && '<span class="popup-tag">🐾 Pets OK</span>',
+        (pin.parking > 0) && `<span class="popup-tag">🅿️ ${pin.parking} car parking</span>`,
+        pin.looking_for_flatmate && '<span class="popup-tag">👥 Needs flatmate</span>',
+      ].filter(Boolean).join('');
+      tagsEl.innerHTML = tags;
+
+      const posted = pin.created_at ? timeAgo(new Date(pin.created_at)) : '';
+      document.getElementById('popup-meta').innerHTML = `
+        ${pin.society_name ? `<strong>${pin.society_name}</strong>` : ''}
+        ${posted ? ` · ${posted} ago` : ''}
+      `;
+
+      const ol = document.getElementById('popup-one-liner');
+      if (pin.one_liner) { ol.textContent = `"${pin.one_liner}"`; ol.classList.remove('hidden'); }
+      else { ol.classList.add('hidden'); }
+
+      const footer = document.getElementById('popup-footer');
+      const isOwner = pin.device_id === (window.delhiRentApp && window.delhiRentApp.deviceId);
+      if (isOwner) { footer.classList.remove('hidden'); footer.dataset.pinId = pin.id; }
+      else { footer.classList.add('hidden'); }
+
+      document.getElementById('btn-interested').dataset.pinId = pin.id;
+      document.getElementById('btn-watch-area').dataset.pinId = pin.id;
+      popup.dataset.pinId = pin.id;
+      popup.classList.remove('hidden');
+    }
+
+    function closePinPopup() {
+      document.getElementById('pin-popup')?.classList.add('hidden');
+      currentPopupPin = null;
+    }
+
+    function getPinById(id) { return allPins.find(p => p.id === id) || null; }
+
+    function openShareModal(pin) {
+      const modal = document.getElementById('share-modal');
+      if (!modal) return;
+      const url = `https://delhi.rent?pin=${pin.id}`;
+      const msg = `Check out this listing on delhi.rent: ₹${pin.rent?.toLocaleString('en-IN')} / ${pin.bhk} BHK${pin.society_name ? ` at ${pin.society_name}` : ''}`;
+      document.getElementById('share-whatsapp').href =
+        `https://wa.me/?text=${encodeURIComponent(msg + ' ' + url)}`;
+      document.getElementById('btn-copy-link').onclick = () => {
+        navigator.clipboard.writeText(url).then(() => showToast('Link copied!', 'success'));
+      };
+      modal.classList.remove('hidden');
+    }
+
+    function openWatchModal(lat, lng) {
+      const modal = document.getElementById('watch-modal');
+      if (!modal) return;
+      modal.dataset.lat = lat;
+      modal.dataset.lng = lng;
+      modal.classList.remove('hidden');
+    }
+
+    function openInterestModal(pinId) {
+      const modal = document.getElementById('interest-modal');
+      if (!modal) return;
+      modal.dataset.pinId = pinId;
+      modal.classList.remove('hidden');
+    }
+
+    // ============================================================
+    // SECTION 10: SUPABASE — Client, pins, realtime, mutations
+    // ============================================================
+
+    let supabase = null;
+
+    async function initSupabase() {
+      const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+      supabase = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+      window._supabase = supabase; // for stats queries
+      subscribeRealtime();
+      // Set ready flag BEFORE loading — loadPinsFromSupabase uses it to decide
+      // whether to update the map. Welcome modal loads will set it false to skip map update.
+      window.__supabaseReady = true;
+      await loadPinsFromSupabase();
+    }
+
+    async function loadPinsFromSupabase() {
+      if (!supabase) return; // Supabase not ready yet
+      const filters = { ...filterState };
+      let { data, error } = await supabase.rpc('get_pins', {
+        p_type:       filters.pinView   || null,
+        p_bhk:        (filters.bhk && filters.bhk.length > 0) ? filters.bhk : null,
+        p_min_rent:   filters.minRent    || null,
+        p_max_rent:   filters.maxRent    || null,
+        p_gated:      filters.gated     || null,
+        p_furnishing: filters.furnishing || null,
+        p_min_rating: filters.rating      || null,
+      });
+      // Fallback: direct query if RPC not found or returned no data
+      let pins = data || [];
+      if (error || !data || data.length === 0) {
+        const { data: directData } = await supabase
+          .from('pins').select('*')
+          .is('deleted_at', null)
+          .lt('reports_count', 3)
+          .limit(500);
+        pins = directData || [];
+      }
+
+      allPins.length = 0;
+      allPins.push(...pins);
+      window.__allPins = allPins;
+
+      // Only update map if Supabase is fully initialized (not just welcome stats load)
+      if (window.__supabaseReady) {
+        onPinsLoaded(allPins);
+        document.getElementById('pin-count').textContent = allPins.length;
+      }
+    }
+
+    function subscribeRealtime() {
+      supabase.channel('pins-channel')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pins' }, (payload) => {
+          const newPin = payload.new;
+          if (newPin.deleted_at || newPin.reports_count >= 3) return;
+          if (!allPins.find(p => p.id === newPin.id)) {
+            allPins.push(newPin);
+            addPin(newPin);
+            showToast('New pin dropped nearby!', '');
+          }
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'pins' }, (payload) => {
+          const updated = payload.new;
+          const idx = allPins.findIndex(p => p.id === updated.id);
+          if (idx !== -1) {
+            if (updated.deleted_at || updated.reports_count >= 3) {
+              allPins.splice(idx, 1);
+              removePin(updated.id);
+            } else {
+              allPins[idx] = { ...allPins[idx], ...updated };
+              removePin(updated.id);
+              addPin(allPins[idx]);
+            }
+          }
+        })
+        .subscribe();
+    }
+
+    async function submitPin(pinData) {
+      const deviceId = Auth.getDeviceId();
+      const ip = await Auth.fetchIP();
+      const payload = {
+        type: pinData.type, lat: pinData.lat, lng: pinData.lng, bhk: pinData.bhk,
+        rent: pinData.rent, device_id: deviceId, creator_ip: ip,
+        furnishing: pinData.furnishing || null, gated: pinData.gated ?? null,
+        landlord_type: pinData.landlord_type || null, who_lives: pinData.who_lives || null,
+        deposit_months: pinData.deposit || null, pets_allowed: pinData.pets_allowed || null,
+        parking: pinData.parking || null, sqft: pinData.sqft || null,
+        society_name: pinData.society_name || null, commute_hub: pinData.commute_hub || null,
+        water_supply: pinData.water_supply || null, power_cuts: pinData.power_cuts || null,
+        one_liner: pinData.one_liner || null,
+        looking_for_flatmate: pinData.looking_for_flatmate || false,
+        email: pinData.email || null,
+      };
+      const { data, error } = await supabase.from('pins').insert(payload).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    async function updatePin(pinId, updates) {
+      const deviceId = Auth.getDeviceId();
+      // Use SQL function to bypass RLS anon-key limitation
+      const { data, error } = await supabase.rpc('update_pin', {
+        p_id: pinId,
+        p_device_id: deviceId,
+        p_updates: JSON.stringify(updates),
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    async function deletePin(pinId) {
+      const deviceId = Auth.getDeviceId();
+      const { error } = await supabase.rpc('delete_pin', {
+        p_id: pinId, p_device_id: deviceId,
+      });
+      if (error) throw new Error(error.message);
+    }
+
+    async function ratePin(pinId, localityRating, builtRating) {
+      const deviceId = Auth.getDeviceId();
+      const { data, error } = await supabase.from('ratings').upsert({
+        pin_id: pinId, device_id: deviceId, locality_rating: localityRating, built_rating: builtRating,
+      }, { onConflict: 'pin_id,device_id' }).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    async function commentPin(pinId, body) {
+      const deviceId = Auth.getDeviceId();
+      const { data, error } = await supabase
+        .from('comments').insert({ pin_id: pinId, device_id: deviceId, body }).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    async function sendInterest(pinId, seekerEmail, message) {
+      const { data, error } = await supabase.rpc('send_interest', {
+        p_pin_id: pinId, p_seeker_email: seekerEmail, p_message: message,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    }
+
+    async function watchArea(lat, lng, radiusKm, email, phone, durationMonths) {
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
+      await supabase.from('watched_areas').insert({
+        lat, lng, radius_km: radiusKm, email, phone,
+        duration_months: durationMonths, expires_at: expiresAt.toISOString(),
+      });
+    }
+
+    // ============================================================
+    // SECTION 11: STATS — Live averages, leaderboard, draw area
+    // ============================================================
+
+    let areaDrawRect = null;
+
+    async function loadStats() {
+      const { data } = await supabase.from('pins')
+        .select('bhk, rent, type').is('deleted_at', null)
+        .eq('type', 'rental').lt('reports_count', 3);
+      const grouped = {};
+      (data || []).forEach(p => {
+        const k = p.bhk <= 5 ? p.bhk : 5;
+        if (!grouped[k]) grouped[k] = [];
+        grouped[k].push(p.rent);
+      });
+      const stats = {};
+      Object.entries(grouped).forEach(([bhk, rents]) => {
+        stats[bhk] = { avg: Math.round(rents.reduce((a, b) => a + b, 0) / rents.length), count: rents.length };
+      });
+      return stats;
+    }
+
+    async function loadLeaderboard() {
+      const { data } = await supabase.from('pins')
+        .select('bhk, rent, society_name, gated, lat, lng')
+        .is('deleted_at', null).eq('type', 'rental').lt('reports_count', 3)
+        .order('rent', { ascending: false }).limit(5);
+      return data || [];
+    }
+
+    function renderAverages(stats) {
+      const bhkMap = { 1: '1bhk', 2: '2bhk', 3: '3bhk', 4: '4bhk', 5: '5bhk' };
+      Object.entries(bhkMap).forEach(([bhk, key]) => {
+        const el  = document.getElementById(`avg-${key}`);
+        const cnt = document.getElementById(`avg-${key}-count`);
+        if (!el) return;
+        const s = stats[bhk] || { avg: 0, count: 0 };
+        el.textContent  = `₹${(s.avg / 1000).toFixed(1)}K`;
+        if (cnt) cnt.textContent = `${s.count} pins`;
+      });
+      document.getElementById('total-pins-stat').textContent =
+        Object.values(stats).reduce((a, s) => a + s.count, 0);
+    }
+
+    function renderLeaderboard(top) {
+      const container = document.getElementById('leaderboard-list');
+      if (!container) return;
+      container.innerHTML = top.map((pin, i) => `
+        <div class="leaderboard-item">
+          <span class="lb-rank">#${i + 1}</span>
+          <span class="lb-area">${pin.society_name || 'Gurgaon Area'}</span>
+          <span><span class="lb-rent">₹${(pin.rent / 1000).toFixed(0)}K</span> <span class="lb-bhk">/ ${pin.bhk}BHK</span></span>
+        </div>`).join('');
+    }
+
+    async function loadAndRenderStats() {
+      const [stats, top] = await Promise.all([loadStats(), loadLeaderboard()]);
+      renderAverages(stats);
+      renderLeaderboard(top);
+    }
+
+    function bindDrawArea() {
+      const btn = document.getElementById('btn-draw-area');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        btn.textContent = '✏️ Drawing... Click two points';
+        btn.disabled = true;
+        let points = [];
+        const handler = (e) => {
+          points.push(e.latLng);
+          if (points.length === 2) {
+            google.maps.event.removeListener(listener);
+            finalizeAreaDraw(points[0], points[1]);
+            btn.textContent = '✏️ Draw Area';
+            btn.disabled = false;
+          } else {
+            btn.textContent = '✏️ Point 1 set — click second point';
+          }
+        };
+        const listener = mapInstance.addListener('click', handler);
+      });
+    }
+
+    async function finalizeAreaDraw(p1, p2) {
+      if (areaDrawRect) areaDrawRect.setMap(null);
+      const bounds = new google.maps.LatLngBounds(p1, p2);
+      areaDrawRect = new google.maps.Rectangle({
+        bounds,
+        fillColor: '#7c3aed', fillOpacity: 0.1,
+        strokeColor: '#a78bfa', strokeWeight: 2,
+        map: mapInstance, zIndex: 20,
+      });
+      const ne = bounds.getNorthEast();
+      const sw = bounds.getSouthWest();
+      const { data } = await supabase.from('pins')
+        .select('bhk, rent').is('deleted_at', null)
+        .eq('type', 'rental').lt('reports_count', 3)
+        .gte('lat', sw.lat()).lte('lat', ne.lat())
+        .gte('lng', sw.lng()).lte('lng', ne.lng());
+      const grouped = {};
+      (data || []).forEach(p => {
+        const k = p.bhk <= 5 ? p.bhk : 5;
+        if (!grouped[k]) grouped[k] = [];
+        grouped[k].push(p.rent);
+      });
+      const stats = {};
+      Object.entries(grouped).forEach(([bhk, rents]) => {
+        stats[bhk] = { avg: Math.round(rents.reduce((a, b) => a + b, 0) / rents.length), count: rents.length };
+      });
+      const container = document.getElementById('area-stats-result');
+      const table = document.getElementById('area-stats-table');
+      if (container && table) {
+        container.classList.remove('hidden');
+        table.innerHTML = Object.entries(stats).map(([bhk, s]) => `
+          <div class="avg-row">
+            <span class="avg-bhk">${bhk} BHK</span>
+            <span class="avg-bar"><div class="avg-bar-fill" style="width:${Math.min(100, (s.avg / 150000) * 100)}%"></div></span>
+            <span class="avg-rent">₹${(s.avg / 1000).toFixed(1)}K</span>
+            <span class="avg-count">${s.count} pins</span>
+          </div>`).join('') || '<p style="color:var(--text-muted);font-size:12px">No pins in this area</p>';
+      }
+    }
+
+    // ============================================================
+    // SECTION 12: PIN FORM — Open, close, submit, edit
+    // ============================================================
+
+    let pinFormLat     = null;
+    let pinFormLng     = null;
+    let editingPinId   = null;
+    let selectedRatings = { locality: 0, built: 0 };
+
+    function openFormAt(lat, lng) {
+      pinFormLat = lat; pinFormLng = lng; editingPinId = null;
+      document.getElementById('f-lat').value = lat;
+      document.getElementById('f-lng').value = lng;
+      document.getElementById('f-edit-id').value = '';
+      document.getElementById('form-title').textContent = 'Drop a Pin';
+      document.getElementById('btn-submit-pin').textContent = 'Drop Pin on Map';
+      document.getElementById('pin-form')?.reset();
+      document.getElementById('pin-form-panel').classList.remove('hidden');
+    }
+
+    function closeFormPanel() {
+      document.getElementById('pin-form-panel')?.classList.add('hidden');
+      pinFormLat = null; pinFormLng = null; editingPinId = null;
+    }
+
+    function editPin(pinId) {
+      const pin = getPinById(pinId);
+      if (!pin) return;
+      editingPinId = pinId; pinFormLat = pin.lat; pinFormLng = pin.lng;
+      document.getElementById('f-lat').value = pin.lat;
+      document.getElementById('f-lng').value = pin.lng;
+      document.getElementById('f-edit-id').value = pinId;
+      document.getElementById('form-title').textContent = 'Edit Pin';
+      document.getElementById('btn-submit-pin').textContent = 'Save Changes';
+      if (pin.bhk) document.getElementById('f-bhk').value = pin.bhk;
+      if (pin.rent) document.getElementById('f-rent').value = pin.rent;
+      if (pin.society_name) document.getElementById('f-society').value = pin.society_name;
+      document.getElementById('pin-form-panel').classList.remove('hidden');
+      closePinPopup();
+    }
+
+    function collectFormData(mode) {
+      const getField = (field) => {
+        const btn = document.querySelector(`[data-field="${field}"].active`);
+        return btn ? btn.dataset.val : null;
+      };
+      if (mode === 'rental') {
+        return {
+          bhk: parseInt(document.getElementById('f-bhk').value),
+          rent: parseInt(document.getElementById('f-rent').value),
+          furnishing: getField('furnishing'),
+          gated: getField('gated') === 'true',
+          landlord_type: getField('landlord_type') || null,
+          who_lives: getField('who_lives') || null,
+          deposit_months: parseInt(document.getElementById('f-deposit').value) || null,
+          pets_allowed: getField('pets_allowed') || null,
+          parking: parseInt(document.getElementById('f-parking').value) || null,
+          sqft: parseInt(document.getElementById('f-sqft').value) || null,
+          society_name: document.getElementById('f-society').value || null,
+          commute_hub: document.getElementById('f-commute-hub').value || null,
+          water_supply: document.getElementById('f-water').value || null,
+          power_cuts: document.getElementById('f-power').value || null,
+          one_liner: document.getElementById('f-one-liner').value || null,
+          looking_for_flatmate: document.getElementById('f-flatmate').checked,
+          email: document.getElementById('f-email').value || null,
+        };
+      } else if (mode === 'seeker') {
+        const bhkPref = [...document.querySelectorAll('[data-bhk-pref]')]
+          .find(c => c.classList.contains('active'))?.dataset.bhkPref;
+        return {
+          budget: parseInt(document.getElementById('f-budget').value),
+          bhk_pref: bhkPref || null,
+          available_from: document.getElementById('f-movein').value || null,
+          food_pref: getField('food_pref') || null,
+          smoker_ok: getField('smoker_ok') || null,
+          gender_pref: getField('gender_pref') || null,
+          lifestyle_note: document.getElementById('f-lifestyle').value || null,
+          email: document.getElementById('f-seeker-email').value || null,
+          phone: document.getElementById('f-seeker-phone').value || null,
+        };
+      } else {
+        return {
+          bhk: parseInt(document.getElementById('f-room-bhk').value) || null,
+          rent: parseInt(document.getElementById('f-room-rent').value),
+          available_from: document.getElementById('f-available-from').value || null,
+          gender_pref: getField('flatmate_gender') || null,
+          smoker_ok: getField('flatmate_smoker') || null,
+          food_pref: getField('flatmate_food') || null,
+          parking: parseInt(document.getElementById('f-flatmate-parking').value) || null,
+          email: document.getElementById('f-flatmate-email').value || null,
+          phone: document.getElementById('f-flatmate-phone').value || null,
+        };
+      }
+    }
+
+    async function handlePinSubmit(e) {
+      e.preventDefault();
+      const mode = document.querySelector('.mode-tab.active')?.dataset.mode || 'rental';
+      const lat = parseFloat(document.getElementById('f-lat').value);
+      const lng = parseFloat(document.getElementById('f-lng').value);
+      if (!lat || !lng) { showToast('Invalid location', 'error'); return; }
+      const formData = collectFormData(mode);
+      try {
+        if (editingPinId) {
+          await updatePin(editingPinId, formData);
+          showToast('Listing updated!', 'success');
+        } else {
+          await submitPin({ ...formData, lat, lng, type: mode === 'flatmate' ? 'flatmate' : mode });
+          showToast('Pin dropped on map!', 'success');
+        }
+        closeFormPanel();
+      } catch (err) {
+        showToast(err.message || 'Failed to save', 'error');
+      }
+    }
+
+    // ============================================================
+    // SECTION 13: PIN EVENT HANDLERS
+    // ============================================================
+
+    function onPinsLoaded(pins) {
+      clearPins();
+      pins.forEach(pin => addPin(pin));
+      document.getElementById('visible-pin-count').textContent = pins.length;
+      if (pins.length > 0) fitToBounds(pins.slice(0, 200));
+    }
+
+    // ============================================================
+    // SECTION 14: ON MAP IDLE — Coordinated overlay refresh
+    // ============================================================
+
+    function onMapIdle(bounds, zoom) {
+      updateSectorLabelVisibility(zoom);
+      updateMetroStationVisibility(zoom);
+      if (CONFIG._aqiVisible && bounds) {
+        fetchAQIForBounds(bounds).then(renderAQIZones);
+      }
+    }
+
+    // ============================================================
+    // SECTION 15: EVENT BINDINGS — All UI listeners in one place
+    // ============================================================
+
+    function bindEvents() {
+      // --- Modal closes ---
+      document.querySelectorAll('.modal-close, .panel-close').forEach(btn => {
+        btn.addEventListener('click', () => {
+          btn.closest('.modal, .panel')?.classList.add('hidden');
+        });
+      });
+      document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+      });
+
+      // --- Map controls ---
+      document.getElementById('btn-metro').addEventListener('click', () => {
+        const btn = document.getElementById('btn-metro');
+        const show = !CONFIG._metroVisible;
+        toggleMetro(show);
+        btn.classList.toggle('active', show);
+        showToast(show ? 'Metro lines ON' : 'Metro lines OFF');
+      });
+
+      document.getElementById('btn-satellite').addEventListener('click', () => {
+        const btn = document.getElementById('btn-satellite');
+        CONFIG._satelliteVisible = !CONFIG._satelliteVisible;
+        if (CONFIG._satelliteVisible) {
+          mapInstance?.setOptions({ mapTypeId: google.maps.MapTypeId.SATELLITE });
+          btn.classList.add('active');
+          showToast('Satellite view ON');
+        } else {
+          mapInstance?.setOptions({ mapTypeId: google.maps.MapTypeId.HYBRID });
+          btn.classList.remove('active');
+          showToast('Satellite view OFF');
+        }
+      });
+
+      document.getElementById('btn-aqi').addEventListener('click', () => {
+        const btn = document.getElementById('btn-aqi');
+        const show = !CONFIG._aqiVisible;
+        toggleAQI(show, mapInstance?.getBounds());
+        btn.classList.toggle('active', show);
+        showToast(show ? 'AQI overlay ON — data from WAQI' : 'AQI overlay OFF');
+      });
+
+      document.getElementById('btn-express').addEventListener('click', () => {
+        const btn = document.getElementById('btn-express');
+        const show = !CONFIG._expressVisible;
+        toggleExpressways(show);
+        btn.classList.toggle('active', show);
+        showToast(show ? 'Expressways ON' : 'Expressways OFF');
+      });
+
+      document.getElementById('btn-legend')?.addEventListener('click', () => openModal('legend-modal'));
+
+      document.getElementById('btn-pin-location')?.addEventListener('click', () => {
+        if (!navigator.geolocation) { showToast('Geolocation not supported', 'error'); return; }
+        navigator.geolocation.getCurrentPosition(pos => {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          mapInstance?.panTo(loc);
+          mapInstance?.setZoom(15);
+          showToast('You are here', '');
+        }, () => { showToast('Could not get location', 'error'); });
+      });
+
+      // Drop a Pin FAB
+      document.getElementById('btn-drop-pin-fab')?.addEventListener('click', () => {
+        const center = mapInstance?.getCenter();
+        if (center) {
+          window.delhiRentApp?.openFormAt(center.lat(), center.lng());
+        } else {
+          window.delhiRentApp?.openFormAt(CONFIG.MAP_CENTER.lat, CONFIG.MAP_CENTER.lng);
+        }
+      });
+
+      // Green Cover toggle
+      document.getElementById('btn-green-cover')?.addEventListener('click', () => {
+        const btn = document.getElementById('btn-green-cover');
+        const show = !CONFIG._greenCoverVisible;
+        toggleGreenCover(show);
+        btn.classList.toggle('active', show);
+        showToast(show ? 'Green Cover ON' : 'Green Cover OFF');
+      });
+
+      // --- Nav ---
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          if (btn.dataset.view === 'stats') { openModal('stats-modal'); loadAndRenderStats(); }
+          if (btn.dataset.view === 'faq') { openModal('faq-modal'); }
+          if (btn.dataset.view === 'list') { window.delhiRentApp?.openFormAt(CONFIG.MAP_CENTER.lat, CONFIG.MAP_CENTER.lng); }
+          if (btn.dataset.view === 'avail') {
+            filterState.pinView = 'rental';
+            document.querySelectorAll('[data-pin-view]').forEach(b => b.classList.remove('active'));
+            document.querySelector('[data-pin-view="rental"]')?.classList.add('active');
+            loadPinsFromSupabase();
+          }
+        });
+      });
+
+      // --- Filters ---
+      document.querySelectorAll('#bhk-chips .chip').forEach(chip => {
+        chip.addEventListener('click', async () => {
+          chip.classList.toggle('active');
+          toggleBHK(parseInt(chip.dataset.bhk));
+          await loadPinsFromSupabase();
+        });
+      });
+
+      document.querySelectorAll('[data-pin-view]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          document.querySelectorAll('[data-pin-view]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          togglePinView(btn.dataset.pinView);
+          await loadPinsFromSupabase();
+        });
+      });
+
+      document.getElementById('rent-min')?.addEventListener('change', async e => {
+        setFilter('minRent', e.target.value ? parseInt(e.target.value) : null);
+        await loadPinsFromSupabase();
+      });
+      document.getElementById('rent-max')?.addEventListener('change', async e => {
+        setFilter('maxRent', e.target.value ? parseInt(e.target.value) : null);
+        await loadPinsFromSupabase();
+      });
+
+      document.querySelectorAll('[data-furnishing]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          document.querySelectorAll('[data-furnishing]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          setFilter('furnishing', btn.dataset.furnishing === 'any' ? null : btn.dataset.furnishing);
+          await loadPinsFromSupabase();
+        });
+      });
+
+      document.querySelectorAll('[data-gated]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          document.querySelectorAll('[data-gated]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          setFilter('gated', btn.dataset.gated === 'any' ? null : btn.dataset.gated === 'gated');
+          await loadPinsFromSupabase();
+        });
+      });
+
+      document.querySelectorAll('#rating-chips .chip').forEach(chip => {
+        chip.addEventListener('click', async () => {
+          document.querySelectorAll('#rating-chips .chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          setFilter('rating', parseInt(chip.dataset.rating));
+          await loadPinsFromSupabase();
+        });
+      });
+
+      document.getElementById('metro-distance')?.addEventListener('change', async e => {
+        setFilter('metroDist', e.target.value ? parseFloat(e.target.value) : null);
+        await loadPinsFromSupabase();
+      });
+
+      document.getElementById('commute-hub')?.addEventListener('change', async e => {
+        setFilter('commuteHub', e.target.value || null);
+        await loadPinsFromSupabase();
+      });
+
+      document.getElementById('btn-clear-filters')?.addEventListener('click', async () => {
+        clearAllFilters();
+        document.querySelectorAll('.chip.active, .toggle-btn.active').forEach(el => {
+          if (el.dataset.bhk || el.dataset.rating) el.classList.remove('active');
+        });
+        await loadPinsFromSupabase();
+      });
+
+      // --- Pin form ---
+      document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          document.querySelectorAll('.form-section').forEach(s => s.classList.add('hidden'));
+          document.getElementById(`form-section-${tab.dataset.mode}`)?.classList.remove('hidden');
+        });
+      });
+
+      document.querySelectorAll('[data-field]').forEach(btn => {
+        if (btn.tagName === 'BUTTON') {
+          btn.addEventListener('click', () => {
+            const field = btn.dataset.field;
+            document.querySelectorAll(`[data-field="${field}"]`).forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+          });
+        }
+      });
+
+      document.getElementById('form-close')?.addEventListener('click', closeFormPanel);
+      document.getElementById('pin-form')?.addEventListener('submit', handlePinSubmit);
+
+      // --- Pin popup ---
+      document.getElementById('popup-close')?.addEventListener('click', closePinPopup);
+
+      document.getElementById('btn-interested')?.addEventListener('click', () => {
+        openInterestModal(document.getElementById('btn-interested').dataset.pinId);
+      });
+
+      document.getElementById('btn-watch-area')?.addEventListener('click', () => {
+        const pin = getPinById(document.getElementById('btn-watch-area').dataset.pinId);
+        if (pin) openWatchModal(pin.lat, pin.lng);
+      });
+
+      document.getElementById('btn-share')?.addEventListener('click', () => {
+        const pin = getPinById(document.getElementById('pin-popup').dataset.pinId);
+        if (pin) openShareModal(pin);
+      });
+
+      // Star ratings
+      document.querySelectorAll('.star-picker').forEach(picker => {
+        picker.querySelectorAll('.star').forEach(star => {
+          star.addEventListener('click', () => {
+            selectedRatings[picker.dataset.field] = parseInt(star.dataset.val);
+            picker.querySelectorAll('.star').forEach((s, i) => {
+              s.classList.toggle('lit', i < parseInt(star.dataset.val));
+            });
+          });
+        });
+      });
+
+      document.getElementById('btn-submit-rating')?.addEventListener('click', async () => {
+        const pinId = document.getElementById('pin-popup').dataset.pinId;
+        try {
+          await ratePin(pinId, selectedRatings.locality, selectedRatings.built);
+          showToast('Rating saved!', 'success');
+        } catch (e) { showToast('Failed to save rating', 'error'); }
+      });
+
+      document.getElementById('btn-submit-comment')?.addEventListener('click', async () => {
+        const pinId = document.getElementById('pin-popup').dataset.pinId;
+        const body = document.getElementById('comment-input')?.value?.trim();
+        if (!body) return;
+        try {
+          await commentPin(pinId, body);
+          document.getElementById('comment-input').value = '';
+          showToast('Comment posted!', 'success');
+        } catch (e) { showToast('Failed to post comment', 'error'); }
+      });
+
+      document.getElementById('btn-edit-pin')?.addEventListener('click', () => {
+        editPin(document.getElementById('popup-footer').dataset.pinId);
+      });
+
+      document.getElementById('btn-delete-pin')?.addEventListener('click', async () => {
+        const pinId = document.getElementById('popup-footer').dataset.pinId;
+        if (!confirm('Delete this listing?')) return;
+        try {
+          await deletePin(pinId);
+          showToast('Listing deleted', 'success');
+          closePinPopup();
+          removePin(pinId);
+        } catch (e) { showToast('Failed to delete', 'error'); }
+      });
+
+      // --- Interest modal ---
+      document.getElementById('interest-close')?.addEventListener('click', () => closeModal('interest-modal'));
+      document.getElementById('interest-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const pinId = document.getElementById('interest-modal').dataset.pinId;
+        const email = document.getElementById('int-email').value;
+        const msg   = document.getElementById('int-msg').value;
+        try {
+          await sendInterest(pinId, email, msg);
+          showToast('Interest sent! Owner will be notified.', 'success');
+          closeModal('interest-modal');
+        } catch (err) { showToast('Failed to send. Try again.', 'error'); }
+      });
+
+      // --- Watch modal ---
+      document.getElementById('watch-close')?.addEventListener('click', () => closeModal('watch-modal'));
+      document.getElementById('watch-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const modal    = document.getElementById('watch-modal');
+        const lat      = parseFloat(modal.dataset.lat);
+        const lng      = parseFloat(modal.dataset.lng);
+        const email    = document.getElementById('w-email').value;
+        const phone    = document.getElementById('w-phone').value;
+        const duration = parseInt(document.getElementById('w-duration').value);
+        try {
+          await watchArea(lat, lng, 1, email, phone, duration);
+          showToast(`Alert set for ${duration} month${duration > 1 ? 's' : ''}!`, 'success');
+          closeModal('watch-modal');
+        } catch (err) { showToast('Failed to set alert', 'error'); }
+      });
+
+      // --- Share modal ---
+      document.getElementById('share-close')?.addEventListener('click', () => closeModal('share-modal'));
+
+      // --- Stats modal ---
+      document.getElementById('stats-close')?.addEventListener('click', () => closeModal('stats-modal'));
+      document.getElementById('legend-close')?.addEventListener('click', () => closeModal('legend-modal'));
+      document.getElementById('faq-close')?.addEventListener('click', () => closeModal('faq-modal'));
+      document.getElementById('btn-welcome-explore')?.addEventListener('click', () => closeModal('welcome-modal'));
+      document.getElementById('btn-welcome-drop')?.addEventListener('click', () => {
+        closeModal('welcome-modal');
+        window.delhiRentApp?.openFormAt(CONFIG.MAP_CENTER.lat, CONFIG.MAP_CENTER.lng);
+      });
+
+      document.querySelectorAll('.stats-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.stats-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          document.getElementById('stats-averages').classList.add('hidden');
+          document.getElementById('stats-leaderboard').classList.add('hidden');
+          document.getElementById('stats-area').classList.add('hidden');
+          document.getElementById(`stats-${tab.dataset.statsView}`)?.classList.remove('hidden');
+          if (tab.dataset.statsView !== 'area') loadAndRenderStats();
+        });
+      });
+
+      document.getElementById('btn-overall')?.addEventListener('click', () => {
+        document.getElementById('btn-near-you').classList.remove('active');
+        document.getElementById('btn-overall').classList.add('active');
+        loadAndRenderStats();
+      });
+      document.getElementById('btn-near-you')?.addEventListener('click', () => {
+        document.getElementById('btn-overall').classList.remove('active');
+        document.getElementById('btn-near-you').classList.add('active');
+        loadAndRenderStats();
+      });
+
+      bindDrawArea();
+    }
+
+    // ============================================================
+    // SECTION 16: APP INIT
+    // ============================================================
+
+    window.delhiRentApp = {
+      deviceId: null,
+      openFormAt,
+      showPinPopup,
+    };
+
+    async function init() {
+      if (typeof google === 'undefined' || !google.maps) {
+        window.addEventListener('google-maps-loaded', init);
+        return;
+      }
+
+      try {
+        // 1. Map first — all overlays need it
+        console.log('[delhi.rent] init: step 1 — initMap()');
+        initMap();
+        console.log('[delhi.rent] init: step 2 — overlays');
+
+        // 2. Render overlays (they reference mapInstance)
+        renderMetroLines();
+        renderExpressways();
+        renderSectorLabels();
+        renderAQILegend(document.getElementById('map-container'));
+
+        // 3. Supabase + auth (own try/catch so failures don't block the welcome modal)
+        let sbReady = false;
+        try {
+          await initSupabase();
+          const did = await Auth.init(supabase);
+          window.delhiRentApp.deviceId = did;
+          sbReady = true;
+        } catch (err) {
+          console.warn('[delhi.rent] Supabase init failed (map still works):', err);
+        }
+
+        // 4. Show welcome modal on first visit (after Supabase so we can load stats)
+        const WELCOME_KEY = 'delhi_rent_seen_welcome';
+        if (!sessionStorage.getItem(WELCOME_KEY)) {
+          sessionStorage.setItem(WELCOME_KEY, '1');
+          if (sbReady) {
+            // Load ALL pin types for the welcome count — but don't update the map
+            // Just count them silently for the modal stats
+            const prevPinView = filterState.pinView;
+            filterState.pinView = null;
+            window.__supabaseReady = false; // skip map update, just count
+            loadPinsFromSupabase().then(() => {
+              const rentals = allPins.filter(p => p.type === 'rental').length;
+              const seekers = allPins.filter(p => p.type === 'seeker' || p.type === 'flatmate').length;
+              const pinsEl = document.getElementById('welcome-pins');
+              const seekEl = document.getElementById('welcome-seekers');
+              if (pinsEl) pinsEl.textContent = rentals || '0';
+              if (seekEl) seekEl.textContent = seekers || '0';
+              // Restore pin view and reload just rentals
+              filterState.pinView = 'rental';
+              window.__supabaseReady = true;
+              loadPinsFromSupabase();
+            });
+          }
+          openModal('welcome-modal');
+        }
+
+        // 5. Bind all UI events (after all HTML + overlays exist)
+        console.log('[delhi.rent] init: step 3 — bindEvents()');
+        bindEvents();
+
+      } catch (err) {
+        console.error('[delhi.rent] init FAILED:', err);
+        const errEl = document.createElement('div');
+        errEl.style = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#2d1b69;padding:16px 24px;border-radius:10px;color:#fff;z-index:9999;font-family:Inter,sans-serif;max-width:500px;text-align:center';
+        errEl.innerHTML = `<strong style="font-size:16px">⚠️ Init error</strong><br><span style="font-size:13px;color:#d8b4fe">${err.message}</span>`;
+        document.body.appendChild(errEl);
+      }
+    }
+
+    // Boot
+    console.log('[delhi.rent] Boot: google=', typeof google !== 'undefined' ? 'loaded' : 'not loaded');
+    if (typeof google !== 'undefined' && google.maps) {
+      console.log('[delhi.rent] Boot: calling init()');
+      init();
+    } else {
+      console.log('[delhi.rent] Boot: waiting for google-maps-loaded');
+      window.addEventListener('google-maps-loaded', init);
+    }
+
+  })(); // end IIFE
+  </script>
+</body>
+</html>
