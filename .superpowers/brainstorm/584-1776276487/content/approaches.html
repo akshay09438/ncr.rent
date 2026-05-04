@@ -1,0 +1,78 @@
+<h2>How do we build this?</h2>
+<p class="subtitle">3 approaches — pick the one that fits how fast you want to move</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>⚡ Fastest — Adapt bengaluru.rent's codebase directly</h3>
+      <p>Take the bengaluru.rent HTML/JS source as a base, strip Bangalore-specific things (Namma Metro GeoJSON, area names, colours), and bolt on NCR features (Delhi Metro, AQI, sectors, expressways). Ship in days.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4>
+          <ul>
+            <li>Fastest to a working product</li>
+            <li>Real-world tested architecture</li>
+            <li>Map rendering, clustering, modals all pre-built</li>
+          </ul>
+        </div>
+        <div class="cons"><h4>Cons</h4>
+          <ul>
+            <li>Single 5,000+ line HTML file — harder to read</li>
+            <li>You inherit any bugs from the original</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>🏗 Recommended — Clean build, same stack</h3>
+      <p>Build fresh with the same Vanilla JS + Google Maps + Supabase stack, but split into logical JS modules (map.js, pins.js, filters.js, metro.js, aqi.js). Same speed as bengaluru.rent, cleaner codebase from day one.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4>
+          <ul>
+            <li>Your code, your structure — easier to modify</li>
+            <li>NCR features (AQI, sectors, expressways) built in cleanly</li>
+            <li>Easier to hand off or collaborate on later</li>
+            <li>Still zero build tools, deploys anywhere free</li>
+          </ul>
+        </div>
+        <div class="cons"><h4>Cons</h4>
+          <ul>
+            <li>2–3x more build time than Option A</li>
+            <li>Map clustering, pin rendering need to be re-implemented</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>🚀 Phased — Ship a fast v1, then add differentiators</h3>
+      <p>Use Option A to ship a working NCR map in days (map + pins + Delhi Metro). Then add AQI overlay, sector labels, and expressway overlay in v2 once you have real users giving feedback.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4>
+          <ul>
+            <li>Live product in days, not weeks</li>
+            <li>Test market appetite before investing in NCR features</li>
+            <li>AQI/expressway APIs tested with real data before integration</li>
+          </ul>
+        </div>
+        <div class="cons"><h4>Cons</h4>
+          <ul>
+            <li>v1 won't feel different from a Bangalore reskin</li>
+            <li>Refactoring the monolith for v2 features is messier</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:20px">💡 Recommendation: <strong>Option B</strong> — clean build with same stack. Slightly more upfront work but you own the codebase fully, NCR features slot in naturally, and you're not debugging someone else's 5,000-line file.</p>

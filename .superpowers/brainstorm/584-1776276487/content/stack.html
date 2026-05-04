@@ -1,0 +1,30 @@
+<h2>Which tech stack do you want to build with?</h2>
+<p class="subtitle">This affects how fast we can ship and how easy it is to maintain later</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Same as bengaluru.rent — Vanilla HTML + JS + Supabase</h3>
+      <p>Single HTML file, no build step, deploy anywhere in minutes. Exact same architecture. Easier to copy patterns from bengaluru.rent directly.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Fastest to ship</li><li>Zero complexity</li><li>Cheap to host (Vercel/Netlify free)</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Hard to scale features later</li><li>No component reuse</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Next.js + Supabase</h3>
+      <p>Modern React framework. Easier to add pages, SEO, auth, and email notifications later. More structured codebase.</p>
+      <div class="pros-cons" style="margin-top:12px">
+        <div class="pros"><h4>Pros</h4><ul><li>Scales well as features grow</li><li>Built-in SEO (great for "Gurgaon rent" Google traffic)</li><li>Easier to add email, auth later</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More setup time upfront</li><li>More complex than bengaluru.rent</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:24px">💡 Recommendation: <strong>Option A</strong> to get live fast, then migrate to Next.js only if you need to. bengaluru.rent proves the vanilla approach works at scale.</p>

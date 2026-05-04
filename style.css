@@ -454,22 +454,24 @@ select:focus { outline: none; border-color: var(--accent); }
 /* ===== PIN FORM PANEL ===== */
 .panel {
   position: fixed;
-  right: 0;
-  top: var(--nav-h);
-  bottom: 0;
-  width: 380px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(460px, calc(100vw - 32px));
+  max-height: 90vh;
   background: rgba(15,15,26,0.98);
   backdrop-filter: blur(12px);
-  border-left: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   z-index: 150;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideRight 0.2s ease;
+  animation: panelFadeIn 0.2s ease;
 }
-@keyframes slideRight {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
+@keyframes panelFadeIn {
+  from { opacity: 0; transform: translate(-50%, -48%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
 }
 .panel.hidden { display: none; }
 .panel-header {

@@ -58,8 +58,9 @@
     <!-- Map controls (top-right) -->
     <div id="map-controls">
       <button class="ctrl-btn" id="btn-pin-location" title="My location">📍</button>
+      <button class="ctrl-btn" id="btn-toggle-filters" title="Toggle filters">⚙️ Filters</button>
       <button class="ctrl-btn" id="btn-legend" title="Map legend">ℹ️ Legend</button>
-      <button class="ctrl-btn" id="btn-satellite" title="Toggle satellite">🛰 Satellite</button>
+      <button class="ctrl-btn" id="btn-satellite" title="Toggle satellite">🛰 Hybrid</button>
       <button class="ctrl-btn" id="btn-metro"   title="Toggle metro lines">🚇 Metro</button>
       <button class="ctrl-btn" id="btn-aqi"      title="Toggle AQI overlay">🌬 AQI</button>
       <button class="ctrl-btn" id="btn-express"   title="Toggle expressways">🛣 Express</button>
@@ -78,7 +79,7 @@
   </div>
 
   <!-- ===== FILTER PANEL ===== -->
-  <div id="filter-panel">
+  <div id="filter-panel" class="hidden">
     <div class="filter-header">
       <span>Filters</span>
       <button id="btn-clear-filters" class="text-btn">Clear all</button>
@@ -578,6 +579,18 @@
     </form>
   </div>
 
+  <!-- ===== OUT OF BOUNDS MODAL ===== -->
+  <div id="bounds-modal" class="modal hidden">
+    <div class="modal-content modal-sm" style="text-align:center;padding:32px">
+      <div style="font-size:48px;margin-bottom:16px">🗺️</div>
+      <h2 class="modal-title" style="text-align:center">Only live for Delhi NCR right now</h2>
+      <p style="font-size:13px;color:var(--text-muted);margin:12px 0 20px;line-height:1.6" id="bounds-msg">
+        This pin is more than 100 km from Delhi NCR. delhi.rent is currently focused on the Delhi NCR metro area only.
+      </p>
+      <button class="btn btn-primary btn-full" id="bounds-got-it">Got it</button>
+    </div>
+  </div>
+
   <!-- ===== LIVE STATS MODAL ===== -->
   <div id="stats-modal" class="modal hidden">
     <div class="modal-content stats-content">
@@ -819,6 +832,7 @@
       MAP_CENTER:        { lat: 28.4595, lng: 77.0266 },
       MAP_ZOOM:           12,
       PIN_CLUSTER_ZOOM:   14,
+      SERVICE_BOUNDS: { lat: 28.35, lng: 76.90, radiusKm: 60 },
 
       PIN_COLORS: {
         rental_gated:  '#22c55e',
@@ -838,18 +852,31 @@
       CLUSTER_SIZE: 40,
 
       METRO_LINES: {
-        red:    '#ee2d24', blue:   '#3b82f6', green:  '#a3e635',
-        yellow: '#06b6d4', orange: '#f59e0b', violet: '#7c3aed',
-        pink:   '#f97316', magenta:'#84cc16', grey:   '#6b7280',
-        rapid:  '#0ea5e9',
+        red:    '#ff4444',
+        blue:   '#60a5fa',
+        yellow: '#fbbf24',
+        green:  '#34d399',
+        orange: '#f97316',
+        violet: '#c084fc',
+        pink:   '#fb7185',
+        magenta:'#e879f9',
+        grey:   '#94a3b8',
+        rapid:  '#38bdf8',
+      },
+
+      EXPRESSWAY_COLORS: {
+        highway:  '#fcd34d',   // golden yellow — national highways
+        express: '#f97316',    // orange — expressways
+        metro:   '#818cf8',    // indigo — to differentiate from metro
       },
 
       AQI_COLORS: {
         good:          '#22c55e',
         moderate:      '#facc15',
-        unhealthy_sg:  '#f97316',
+        unhealthy_sg:  '#fb923c',
         unhealthy:     '#ef4444',
-        very_unhealthy:'#7c3aed',
+        very_unhealthy:'#dc2626',
+        hazardous:     '#991b1b',
       },
 
       WAQI_BASE_URL: 'https://api.waqi.info/feed',
@@ -1143,34 +1170,86 @@
         streetViewControl: false,
         fullscreenControl: true,
         clickableIcons: false,
-        mapTypeId: google.maps.MapTypeId.HYBRID,
+        mapTypeId: google.maps.MapTypeId.ROADMAP,
+        gestureHandling: 'greedy',
+        disableDoubleClickZoom: false,
       });
+      // Pin cursor on map
+      mapInstance.setOptions({ draggableCursor: 'crosshair' });
 
       // Google Places Autocomplete for search bar
       const searchInput = document.getElementById('search-input');
       const searchResults = document.getElementById('search-results');
+      const autocompleteService = new google.maps.places.AutocompleteService();
+
       if (searchInput && mapInstance) {
-        const ac = new google.maps.places.Autocomplete(searchInput, {
-          types: ['(regions)'],
-          componentRestrictions: { country: 'in' },
-        });
-        ac.setFields(['name', 'geometry', 'types', 'formatted_address']);
-        ac.addListener('place_changed', () => {
-          const place = ac.getPlace();
-          if (!place || !place.geometry) return;
-          if (place.geometry.location) {
-            mapInstance.panTo(place.geometry.location);
-            mapInstance.setZoom(14);
-          }
-          searchResults.classList.add('hidden');
-          searchInput.value = place.formatted_address || place.name || '';
-        });
+        let debounceTimer = null;
         searchInput.addEventListener('input', () => {
-          if (!searchInput.value.trim()) searchResults.classList.add('hidden');
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            const query = searchInput.value.trim();
+            if (!query) { searchResults.classList.add('hidden'); return; }
+            autocompleteService.getPlacePredictions(
+              { input: query, componentRestrictions: { country: 'in' } },
+              (predictions, status) => {
+                if (status !== google.maps.places.PlacesServiceStatus.OK || !predictions) {
+                  searchResults.classList.add('hidden');
+                  return;
+                }
+                searchResults.innerHTML = '';
+                predictions.slice(0, 6).forEach(pred => {
+                  const div = document.createElement('div');
+                  div.className = 'search-result-item';
+                  div.innerHTML = `<strong>${pred.structured_formatting.main_text}</strong><span class="result-type">${pred.structured_formatting.secondary_text}</span>`;
+                  div.addEventListener('click', () => {
+                    const placesService = new google.maps.places.PlacesService(mapInstance);
+                    placesService.getDetails({ placeId: pred.place_id, fields: ['name', 'geometry', 'formatted_address'] }, (place, status) => {
+                      if (status === google.maps.places.PlacesServiceStatus.OK && place.geometry?.location) {
+                        const loc = place.geometry.location;
+                        const lat = loc.lat(), lng = loc.lng();
+                        mapInstance.panTo(loc);
+                        mapInstance.setZoom(15);
+                        searchInput.value = place.formatted_address || place.name || '';
+
+                        // Drop permanent search pin
+                        if (window.__searchPin) { window.__searchPin.setMap(null); }
+                        const marker = new google.maps.Marker({
+                          position: { lat: lat, lng: lng },
+                          map: mapInstance,
+                          icon: {
+                            path: google.maps.SymbolPath.MARKER,
+                            scale: 1,
+                            fillColor: '#f97316',
+                            fillOpacity: 1,
+                            strokeColor: '#ffffff',
+                            strokeWeight: 2,
+                          },
+                          zIndex: 999,
+                        });
+                        window.__searchPin = marker;
+
+                        // Check if out of NCR
+                        const dist = google.maps.geometry.spherical.computeDistanceBetween(
+                          new google.maps.LatLng(CONFIG.MAP_CENTER.lat, CONFIG.MAP_CENTER.lng),
+                          loc
+                        ) / 1000;
+                        if (dist > CONFIG.SERVICE_BOUNDS.radiusKm) {
+                          showOutOfBoundsModal(dist);
+                        }
+                      }
+                    });
+                    searchResults.classList.add('hidden');
+                  });
+                  searchResults.appendChild(div);
+                });
+                searchResults.classList.remove('hidden');
+              }
+            );
+          }, 280);
         });
-        searchInput.addEventListener('focus', () => {
-          // show results if we have predictions cached
-          if (searchResults.children.length > 0) searchResults.classList.remove('hidden');
+
+        searchInput.addEventListener('blur', () => {
+          setTimeout(() => searchResults.classList.add('hidden'), 200);
         });
       }
 
@@ -1189,8 +1268,16 @@
         },
       });
 
-      // Click on map → open pin form
+      // Click on map → open pin form (check bounds)
       mapInstance.addListener('click', (e) => {
+        const dist = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(CONFIG.MAP_CENTER.lat, CONFIG.MAP_CENTER.lng),
+          e.latLng
+        ) / 1000;
+        if (dist > CONFIG.SERVICE_BOUNDS.radiusKm) {
+          showOutOfBoundsModal(dist);
+          return;
+        }
         window.delhiRentApp && window.delhiRentApp.openFormAt(e.latLng.lat(), e.latLng.lng());
       });
 
@@ -1207,16 +1294,22 @@
     function addPin(pin) {
       if (markersByPinId[pin.id]) return; // already rendered
 
+      const color = pinColor(pin);
+      const labelText = pin.bhk ? `${pin.bhk}BHK` : '';
+
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="32" viewBox="0 0 48 32">
+          <rect x="4" y="4" width="40" height="24" rx="6" fill="${color}" stroke="#fff" stroke-width="2"/>
+          <text x="24" y="20" font-family="Inter,Arial,sans-serif" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">${labelText}</text>
+        </svg>`;
+
       const marker = new google.maps.Marker({
         position: { lat: pin.lat, lng: pin.lng },
         map: mapInstance,
         icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: CONFIG.PIN_SIZE / 2,
-          fillColor: pinColor(pin),
-          fillOpacity: 0.9,
-          strokeColor: '#fff',
-          strokeWeight: 1.5,
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+          scaledSize: new google.maps.Size(48, 32),
+          anchor: new google.maps.Point(24, 28),
         },
         title: `₹${pin.rent.toLocaleString('en-IN')} · ${pin.bhk} BHK`,
         zIndex: 5,
@@ -1345,27 +1438,27 @@
         const poly = new google.maps.Polyline({
           path: line.stations.map(s => ({ lat: s.lat, lng: s.lng })),
           strokeColor: line.color,
-          strokeWeight: 4,
-          strokeOpacity: 0.85,
+          strokeWeight: 7,
+          strokeOpacity: 1,
           map: CONFIG._metroVisible ? mapInstance : null,
-          zIndex: 2,
+          zIndex: 5,
         });
         metroPolylines.push(poly);
 
         line.stations.forEach(station => {
           const marker = new google.maps.Marker({
             position: { lat: station.lat, lng: station.lng },
-            map: null,
+            map: CONFIG._metroVisible ? mapInstance : null,
             icon: {
               path: google.maps.SymbolPath.CIRCLE,
-              scale: 4,
+              scale: 7,
               fillColor: line.color,
-              fillOpacity: 0.9,
-              strokeColor: '#fff',
-              strokeWeight: 1,
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 2.5,
             },
             title: station.name,
-            zIndex: 3,
+            zIndex: 6,
           });
           metroMarkers.push(marker);
         });
@@ -1388,11 +1481,11 @@
     // ============================================================
 
     const AQI_BREAKPOINTS = [
-      { max: 50,  label: 'Good',          color: CONFIG.AQI_COLORS.good },
-      { max: 100, label: 'Moderate',      color: CONFIG.AQI_COLORS.moderate },
+      { max: 50,  label: 'Good',           color: CONFIG.AQI_COLORS.good },
+      { max: 100, label: 'Moderate',       color: CONFIG.AQI_COLORS.moderate },
       { max: 200, label: 'Unhealthy (SG)', color: CONFIG.AQI_COLORS.unhealthy_sg },
-      { max: 300, label: 'Unhealthy',      color: CONFIG.AQI_COLORS.unhealthy },
-      { max: 500, label: 'Very Unhealthy', color: CONFIG.AQI_COLORS.very_unhealthy },
+      { max: 300, label: 'Unhealthy',     color: CONFIG.AQI_COLORS.unhealthy },
+      { max: 500, label: 'Very Unhealthy',color: CONFIG.AQI_COLORS.very_unhealthy },
     ];
 
     let aqiCircles     = [];
@@ -1434,14 +1527,14 @@
       aqiPoints.forEach(point => {
         const circle = new google.maps.Circle({
           center: { lat: point.lat, lng: point.lng },
-          radius: 3000,
+          radius: 8000,
           fillColor: point.color,
-          fillOpacity: 0.12,
+          fillOpacity: 0.25,
           strokeColor: point.color,
-          strokeWeight: 1,
-          strokeOpacity: 0.4,
+          strokeWeight: 2,
+          strokeOpacity: 0.9,
           map: CONFIG._aqiVisible ? mapInstance : null,
-          zIndex: 1,
+          zIndex: 0,
         });
         aqiCircles.push(circle);
       });
@@ -1476,28 +1569,105 @@
     }
 
     // ============================================================
-    // SECTION 7: EXPRESSWAYS
+    // SECTION 7: EXPRESSWAYS — styled differently from metro
     // ============================================================
 
-    let expressOverlays = [];
+    let expressOverlays    = [];
+    let expressLabels      = [];
 
     function renderExpressways() {
-      Object.values(CONFIG.EXPRESSWAYS).forEach(exp => {
-        const poly = new google.maps.Polyline({
-          path: exp.path.map(p => ({ lat: p.lat, lng: p.lng })),
+      const EXPRESSWAY_DEFS = [
+        {
+          id: 'nh48',
+          label: 'NH-48',
+          color: CONFIG.EXPRESSWAY_COLORS.highway,
+          path: CONFIG.EXPRESSWAYS.nh48.path,
+          zIndex: 1,
+        },
+        {
+          id: 'dwarka_exp',
+          label: 'Dwarka Exp',
+          color: CONFIG.EXPRESSWAY_COLORS.express,
+          path: CONFIG.EXPRESSWAYS.dwarka_exp.path,
+          zIndex: 1,
+        },
+        {
+          id: 'yamuna_exp',
+          label: 'Yamuna Exp',
+          color: CONFIG.EXPRESSWAY_COLORS.express,
+          path: CONFIG.EXPRESSWAYS.yamuna_exp.path,
+          zIndex: 1,
+        },
+      ];
+
+      function buildCorridorPolygon(path, halfWidthMeters) {
+        const R = 6378137;
+        const pts = [], rev = [];
+        path.forEach(pt => {
+          const latOffset = (halfWidthMeters / R) * (180 / Math.PI);
+          const lngOffset = (halfWidthMeters / R) * (180 / Math.PI) / Math.cos(pt.lat * Math.PI / 180);
+          pts.push({ lat: pt.lat + latOffset, lng: pt.lng });
+          rev.unshift({ lat: pt.lat - latOffset, lng: pt.lng });
+        });
+        return [...pts, ...rev];
+      }
+
+      EXPRESSWAY_DEFS.forEach(exp => {
+        const isExpress = exp.id !== 'nh48';
+        const corridorWidth = isExpress ? 400 : 500;
+
+        // Corridor polygon — semi-transparent fill
+        const corridor = new google.maps.Polygon({
+          paths: buildCorridorPolygon(exp.path, corridorWidth),
+          fillColor: exp.color,
+          fillOpacity: 0.18,
+          strokeColor: exp.color,
+          strokeWeight: 0,
+          map: CONFIG._expressVisible ? mapInstance : null,
+          zIndex: 0,
+        });
+        expressOverlays.push(corridor);
+
+        // Border lines — solid centerline
+        const borderPoly = new google.maps.Polyline({
+          path: exp.path,
           strokeColor: exp.color,
           strokeWeight: 3,
-          strokeOpacity: 0.7,
+          strokeOpacity: 0.8,
           map: CONFIG._expressVisible ? mapInstance : null,
+          zIndex: 1,
+        });
+        expressOverlays.push(borderPoly);
+
+        // Label at midpoint
+        const midIdx = Math.floor(exp.path.length / 2);
+        const mid = exp.path[midIdx];
+        const label = new google.maps.Marker({
+          position: mid,
+          map: CONFIG._expressVisible ? mapInstance : null,
+          icon: {
+            path: 'M -18,-9 L 18,-9 L 18,9 L -18,9 Z',
+            fillColor: exp.color,
+            fillOpacity: 0.95,
+            strokeColor: '#000',
+            strokeWeight: 1,
+          },
+          label: {
+            text: exp.label,
+            fontSize: '10px',
+            fontWeight: '800',
+            color: '#000',
+          },
           zIndex: 2,
         });
-        expressOverlays.push(poly);
+        expressLabels.push(label);
       });
     }
 
     function toggleExpressways(show) {
       CONFIG._expressVisible = show;
       expressOverlays.forEach(p => p.setMap(show ? mapInstance : null));
+      expressLabels.forEach(l => l.setMap(show ? mapInstance : null));
     }
 
     // ============================================================
@@ -1552,20 +1722,34 @@
         greenCoverTileLayer = new google.maps.ImageMapType({
           getTileUrl: (coord, zoom) => {
             const [x, y] = [coord.x, coord.y];
-            // Copernicus Sentinel-2 Global Coverage via GEOLAND2/VITO proxy
+            // Copernicus Sentinel-2 via ESA's OpenCoesione proxy
             const left   = (x / Math.pow(2, zoom)) * 360 - 180;
             const top    = (y / Math.pow(2, zoom)) * 180 - 90;
             const right  = ((x + 1) / Math.pow(2, zoom)) * 360 - 180;
             const bottom = ((y + 1) / Math.pow(2, zoom)) * 180 - 90;
-            return `https://geoserver.terranighe.baia.ra.it/geoserver/wms?service=WMS&request=GetMap&layers=vegetation&styles=&format=image%2Fpng&crs=EPSG%3A4326&width=256&height=256&bbox=${left},${bottom},${right},${top}&transparent=true&opacity=0.4`;
+            return `https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${zoom}/${y}/${x}`;
           },
           tileSize: new google.maps.Size(256, 256),
-          opacity: 0.4,
+          opacity: 0.5,
+          isPng: true,
+        });
+        // Fallback: Sentinel-2 NDVI from openEO
+        window.__greenCoverFallback = new google.maps.ImageMapType({
+          getTileUrl: (coord, zoom) => {
+            const x = coord.x, y = coord.y;
+            const left   = (x / Math.pow(2, zoom)) * 360 - 180;
+            const top    = (y / Math.pow(2, zoom)) * 180 - 90;
+            const right  = ((x + 1) / Math.pow(2, zoom)) * 360 - 180;
+            const bottom = ((y + 1) / Math.pow(2, zoom)) * 180 - 90;
+            return `https://geoserver.terranighe.baia.ra.it/geoserver/wms?service=WMS&request=GetMap&layers=vegetation&styles=&format=image%2Fpng&crs=EPSG%3A4326&width=256&height=256&bbox=${left},${bottom},${right},${top}&transparent=true&opacity=0.55`;
+          },
+          tileSize: new google.maps.Size(256, 256),
+          opacity: 0.55,
           isPng: true,
         });
       }
       if (show) {
-        mapInstance.overlayMapTypes.setAt(0, greenCoverTileLayer);
+        mapInstance.overlayMapTypes.setAt(0, window.__greenCoverFallback);
       } else {
         mapInstance.overlayMapTypes.clear();
       }
@@ -1580,6 +1764,13 @@
 
     function openModal(id)   { document.getElementById(id)?.classList.remove('hidden'); }
     function closeModal(id)   { document.getElementById(id)?.classList.add('hidden'); }
+
+    function showOutOfBoundsModal(dist) {
+      document.getElementById('bounds-msg').textContent =
+        `This pin is ${Math.round(dist)} km from Delhi NCR — beyond our service area of ${CONFIG.SERVICE_BOUNDS.radiusKm} km.`;
+      openModal('bounds-modal');
+      document.getElementById('bounds-got-it').onclick = () => closeModal('bounds-modal');
+    }
 
     function showToast(message, type = '') {
       const el = document.getElementById('toast');
@@ -2118,6 +2309,14 @@
       });
 
       // --- Map controls ---
+      document.getElementById('btn-toggle-filters')?.addEventListener('click', () => {
+        const panel = document.getElementById('filter-panel');
+        if (!panel) return;
+        const isHidden = panel.classList.contains('hidden');
+        panel.classList.toggle('hidden', !isHidden);
+        document.getElementById('btn-toggle-filters')?.classList.toggle('active', isHidden);
+      });
+
       document.getElementById('btn-metro').addEventListener('click', () => {
         const btn = document.getElementById('btn-metro');
         const show = !CONFIG._metroVisible;
@@ -2130,13 +2329,13 @@
         const btn = document.getElementById('btn-satellite');
         CONFIG._satelliteVisible = !CONFIG._satelliteVisible;
         if (CONFIG._satelliteVisible) {
-          mapInstance?.setOptions({ mapTypeId: google.maps.MapTypeId.SATELLITE });
+          mapInstance?.setOptions({ mapTypeId: google.maps.MapTypeId.HYBRID });
           btn.classList.add('active');
           showToast('Satellite view ON');
         } else {
-          mapInstance?.setOptions({ mapTypeId: google.maps.MapTypeId.HYBRID });
+          mapInstance?.setOptions({ mapTypeId: google.maps.MapTypeId.ROADMAP });
           btn.classList.remove('active');
-          showToast('Satellite view OFF');
+          showToast('Roadmap view ON');
         }
       });
 

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Option A — Dashed Road Style</title>
+  <style>
+    body { margin: 0; font-family: Inter, sans-serif; background: #0f0f1a; color: #fff; }
+    #map { width: 100vw; height: 100vh; }
+    .info {
+      position: fixed; top: 16px; left: 16px; background: rgba(15,15,26,0.95);
+      border: 1px solid rgba(124,58,237,0.4); border-radius: 10px; padding: 14px 18px;
+      z-index: 10; max-width: 280px;
+    }
+    .info h2 { margin: 0 0 8px; font-size: 16px; color: #a78bfa; }
+    .info p  { margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5; }
+    .badge {
+      display: inline-block; background: #7c3aed; color: #fff; border-radius: 6px;
+      padding: 2px 8px; font-size: 11px; font-weight: 700; margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="info">
+    <span class="badge">Option A</span>
+    <h2>Dashed Road Style</h2>
+    <p>Wide dark asphalt base + colored dashed foreground. National highways: yellow dashes. Expressways: orange dashes.</p>
+  </div>
+  <div id="map"></div>
+  <script>
+    window.__googleMapsInit = () => window.dispatchEvent(new Event('google-maps-loaded'));
+  </script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAYWTVV8wHpjQMDLX388HFp2duaNB_BoJU&libraries=geometry&callback=__googleMapsInit" async defer></script>
+  <script type="module">
+    await new Promise(r => google?.maps ? r() : window.addEventListener('google-maps-loaded', r));
+
+    const map = new google.maps.Map(document.getElementById('map'), {
+      center: { lat: 28.4595, lng: 77.0266 },
+      zoom: 12,
+      mapTypeId: 'roadmap',
+    });
+
+    const EXPRESSWAY_COLORS = {
+      highway: '#fcd34d',
+      express: '#f97316',
+    };
+
+    const EXPRESSWAY_DEFS = [
+      { id: 'nh48',      label: 'NH-48',  color: EXPRESSWAY_COLORS.highway, path: [{ lat: 28.5700, lng: 76.9500 },{ lat: 28.5300, lng: 77.0100 },{ lat: 28.4950, lng: 77.0700 },{ lat: 28.4700, lng: 77.1200 },{ lat: 28.4400, lng: 77.1700 },{ lat: 28.4100, lng: 77.2200 }], zIndex: 1 },
+      { id: 'dwarka_exp', label: 'Dwarka Exp', color: EXPRESSWAY_COLORS.express, path: [{ lat: 28.6100, lng: 76.9900 },{ lat: 28.5900, lng: 77.0200 },{ lat: 28.5650, lng: 77.0500 },{ lat: 28.5450, lng: 77.0700 },{ lat: 28.5200, lng: 77.0900 },{ lat: 28.4900, lng: 77.1000 }], zIndex: 1 },
+      { id: 'yamuna_exp', label: 'Yamuna Exp', color: EXPRESSWAY_COLORS.express, path: [{ lat: 28.5800, lng: 77.5000 },{ lat: 28.5600, lng: 77.4200 },{ lat: 28.5400, lng: 77.3300 },{ lat: 28.5200, lng: 77.2600 },{ lat: 28.5000, lng: 77.2000 }], zIndex: 1 },
+    ];
+
+    EXPRESSWAY_DEFS.forEach(exp => {
+      const isExpress = exp.id !== 'nh48';
+
+      // Background "road" line — wide, dark, gives road-like feel
+      new google.maps.Polyline({
+        path: exp.path,
+        strokeColor: isExpress ? '#7c2d12' : '#92400e',
+        strokeWeight: 14,
+        strokeOpacity: 0.7,
+        map,
+        zIndex: 0,
+      });
+
+      // Foreground colored dashes — dashed style = NOT a metro line
+      const fgDash = isExpress ? '12,6' : '6,8';
+      new google.maps.Polyline({
+        path: exp.path,
+        strokeColor: exp.color,
+        strokeWeight: isExpress ? 8 : 6,
+        strokeOpacity: 1,
+        strokeDashArray: fgDash,
+        map,
+        zIndex: exp.zIndex,
+      });
+    });
+  </script>
+</body>
+</html>

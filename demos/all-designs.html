@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>All Highway Designs - Delhi NCR Rent Map</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, sans-serif; background: #0f0f1a; color: #fff; }
+    .header {
+      padding: 16px 24px;
+      background: rgba(124,58,237,0.2);
+      border-bottom: 1px solid rgba(124,58,237,0.4);
+      text-align: center;
+    }
+    .header h1 { font-size: 20px; margin-bottom: 4px; }
+    .header p { font-size: 12px; color: #9ca3af; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 0;
+      height: calc(100vh - 70px);
+    }
+    .card {
+      border: 1px solid rgba(124,58,237,0.3);
+      display: flex;
+      flex-direction: column;
+    }
+    .card-header {
+      padding: 10px 16px;
+      background: rgba(124,58,237,0.15);
+      font-size: 13px;
+      font-weight: 700;
+      color: #a78bfa;
+      border-bottom: 1px solid rgba(124,58,237,0.2);
+    }
+    .map { flex: 1; min-height: 250px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Highway / Expressway Visual Designs</h1>
+    <p>Pick one for the main app. All show NH-48 (yellow) + Dwarka Exp + Yamuna Exp (orange)</p>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">A — Dashed Road Style</div>
+      <div class="map" id="map-a"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">B — Shield + Solid Line</div>
+      <div class="map" id="map-b"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">C — Two Parallel Lanes</div>
+      <div class="map" id="map-c"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">D — Alternating Dots</div>
+      <div class="map" id="map-d"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">E — Corridor Fill</div>
+      <div class="map" id="map-e"></div>
+    </div>
+  </div>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAYWTVV8wHpjQMDLX388HFp2duaNB_BoJU&libraries=geometry&callback=window.__googleMapsInit" onerror="console.error('GMaps script load error')"></script>
+  <script type="module">
+    await new Promise(r => google?.maps ? r() : window.addEventListener('google-maps-loaded', r));
+
+    const COLORS = { highway: '#fcd34d', express: '#f97316' };
+    const DEFS = [
+      { id: 'nh48',      label: 'NH-48',      color: COLORS.highway, path: [{ lat: 28.5700, lng: 76.9500 },{ lat: 28.5300, lng: 77.0100 },{ lat: 28.4950, lng: 77.0700 },{ lat: 28.4700, lng: 77.1200 },{ lat: 28.4400, lng: 77.1700 },{ lat: 28.4100, lng: 77.2200 }] },
+      { id: 'dwarka_exp', label: 'Dwarka Exp', color: COLORS.express, path: [{ lat: 28.6100, lng: 76.9900 },{ lat: 28.5900, lng: 77.0200 },{ lat: 28.5650, lng: 77.0500 },{ lat: 28.5450, lng: 77.0700 },{ lat: 28.5200, lng: 77.0900 },{ lat: 28.4900, lng: 77.1000 }] },
+      { id: 'yamuna_exp', label: 'Yamuna Exp', color: COLORS.express, path: [{ lat: 28.5800, lng: 77.5000 },{ lat: 28.5600, lng: 77.4200 },{ lat: 28.5400, lng: 77.3300 },{ lat: 28.5200, lng: 77.2600 },{ lat: 28.5000, lng: 77.2000 }] },
+    ];
+
+    function makeMap(id, renderer) {
+      const map = new google.maps.Map(document.getElementById(id), {
+        center: { lat: 28.50, lng: 77.05 }, zoom: 11, mapTypeId: 'roadmap',
+      });
+      DEFS.forEach(exp => renderer(map, exp));
+    }
+
+    // A: Dashed Road Style
+    makeMap('map-a', (map, exp) => {
+      const isExpress = exp.id !== 'nh48';
+      new google.maps.Polyline({ path: exp.path, strokeColor: isExpress ? '#7c2d12' : '#92400e', strokeWeight: 14, strokeOpacity: 0.7, map, zIndex: 0 });
+      new google.maps.Polyline({ path: exp.path, strokeColor: exp.color, strokeWeight: isExpress ? 8 : 6, strokeOpacity: 1, strokeDashArray: isExpress ? '12,6' : '6,8', map, zIndex: 1 });
+    });
+
+    // B: Shield + Solid Line
+    makeMap('map-b', (map, exp) => {
+      const isExpress = exp.id !== 'nh48';
+      new google.maps.Polyline({ path: exp.path, strokeColor: isExpress ? '#7c2d12' : '#92400e', strokeWeight: 12, strokeOpacity: 0.6, map, zIndex: 0 });
+      new google.maps.Polyline({ path: exp.path, strokeColor: exp.color, strokeWeight: 4, strokeOpacity: 1, map, zIndex: 1 });
+      for (let i = 1; i < exp.path.length - 1; i += 2) {
+        const pt = exp.path[i];
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="22"><rect x="0" y="0" width="44" height="22" rx="3" fill="${exp.color}" stroke="#000" stroke-width="1"/><text x="22" y="15" font-family="Inter,sans-serif" font-size="9" font-weight="800" fill="#000" text-anchor="middle">${exp.label}</text></svg>`;
+        new google.maps.Marker({ position: pt, map, icon: { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg), scaledSize: new google.maps.Size(44, 22), anchor: new google.maps.Point(22, 11) }, zIndex: 2 });
+      }
+    });
+
+    // C: Two Parallel Lanes
+    makeMap('map-c', (map, exp) => {
+      const isExpress = exp.id !== 'nh48';
+      const offset = 0.00018;
+      new google.maps.Polyline({ path: exp.path, strokeColor: isExpress ? '#7c2d12' : '#92400e', strokeWeight: 16, strokeOpacity: 0.5, map, zIndex: 0 });
+      const R = 6378137;
+      const offsetPath = (path, m) => path.map(pt => ({ lat: pt.lat + (m / R) * (180 / Math.PI), lng: pt.lng + (m / R) * (180 / Math.PI) / Math.cos(pt.lat * Math.PI / 180) }));
+      new google.maps.Polyline({ path: offsetPath(exp.path, offset), strokeColor: exp.color, strokeWeight: 4, strokeOpacity: 1, strokeDashArray: isExpress ? '16,8' : '10,8', map, zIndex: 1 });
+      new google.maps.Polyline({ path: offsetPath(exp.path, -offset), strokeColor: exp.color, strokeWeight: 4, strokeOpacity: 1, strokeDashArray: isExpress ? '16,8' : '10,8', map, zIndex: 1 });
+    });
+
+    // D: Alternating Dots
+    makeMap('map-d', (map, exp) => {
+      new google.maps.Polyline({ path: exp.path, strokeColor: exp.color, strokeWeight: 2, strokeOpacity: 0.6, map, zIndex: 0 });
+      exp.path.forEach((pt, i) => {
+        new google.maps.Marker({ position: pt, map, icon: { path: google.maps.SymbolPath.CIRCLE, scale: i % 2 === 0 ? 8 : 5, fillColor: exp.color, fillOpacity: i % 2 === 0 ? 1 : 0.5, strokeColor: '#fff', strokeWeight: 2 }, zIndex: 1 });
+      });
+    });
+
+    // E: Corridor Fill
+    makeMap('map-e', (map, exp) => {
+      const isExpress = exp.id !== 'nh48';
+      const corridorWidth = isExpress ? 400 : 500;
+      const R = 6378137;
+      const pts = [], rev = [];
+      exp.path.forEach(pt => {
+        const lo = (corridorWidth / R) * (180 / Math.PI);
+        pts.push({ lat: pt.lat + lo, lng: pt.lng });
+        rev.unshift({ lat: pt.lat - lo, lng: pt.lng });
+      });
+      new google.maps.Polygon({ paths: [...pts, ...rev], fillColor: exp.color, fillOpacity: 0.18, strokeColor: exp.color, strokeWeight: 0, map, zIndex: 0 });
+      new google.maps.Polyline({ path: exp.path, strokeColor: exp.color, strokeWeight: 3, strokeOpacity: 0.8, map, zIndex: 1 });
+    });
+  </script>
+</body>
+</html>
